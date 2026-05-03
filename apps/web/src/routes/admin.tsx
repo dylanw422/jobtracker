@@ -144,14 +144,15 @@ function AdminDashboard() {
   }, [entries, searchTerm]);
 
   const stats = React.useMemo(() => {
-    if (!entries) return { total: 0, paid: 0, borrowed: 0 };
+    if (!entries) return { total: 0, paid: 0, borrowed: 0, revenue: 0 };
     return entries.reduce(
       (acc: any, curr: any) => ({
         total: acc.total + 1,
         paid: acc.paid + (curr.customerPaid ? 1 : 0),
         borrowed: acc.borrowed + (curr.borrowedAmount > 0 ? curr.borrowedAmount : 0),
+        revenue: acc.revenue + (curr.payment > 0 ? curr.payment : 0),
       }),
-      { total: 0, paid: 0, borrowed: 0 },
+      { total: 0, paid: 0, borrowed: 0, revenue: 0 },
     );
   }, [entries]);
 
@@ -206,92 +207,72 @@ function AdminDashboard() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl pb-24">
       {/* Header Section */}
-      <div className="mb-8 flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
             Management
           </h1>
-          <p className="text-muted-foreground font-medium flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            Overview for {format(date, "MMM d, yyyy")}
+          <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-1.5">
+            <Users className="h-3.5 w-3.5" />
+            {format(date, "EEEE, MMMM d, yyyy")}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <Link to="/admin-settings">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-11 w-11 border-foreground/10 hover:border-primary/50 transition-all"
-              title="Settings"
-            >
-              <Settings className="h-5 w-5" />
-            </Button>
-          </Link>
+        <div className="flex items-center gap-2">
           <Popover>
             <PopoverTrigger asChild>
               <Button
-                variant={"outline"}
-                className={cn(
-                  "flex-1 sm:flex-none sm:w-[260px] h-11 justify-start text-left font-semibold border-foreground/10 shadow-sm transition-all hover:border-primary/50",
-                  !date && "text-muted-foreground",
-                )}
+                variant="outline"
+                className="flex-1 sm:flex-none sm:w-auto h-10 gap-2 border-border/60 font-medium text-sm"
               >
-                <CalendarIcon className="mr-3 h-5 w-5 text-primary" />
-                {date ? format(date, "PPP") : <span>Select date</span>}
+                <CalendarIcon className="h-4 w-4 text-primary" />
+                {format(date, "MMM d, yyyy")}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0 border-none shadow-2xl" align="end">
+            <PopoverContent className="w-auto p-0 shadow-xl" align="end">
               <Calendar
                 mode="single"
                 selected={date}
                 onSelect={(d) => d && setDate(d)}
                 initialFocus
-                className="rounded-xl border shadow-lg"
               />
             </PopoverContent>
           </Popover>
+          <Link to="/admin-settings">
+            <Button variant="outline" size="icon" className="h-10 w-10 border-border/60" title="Settings">
+              <Settings className="h-4 w-4" />
+            </Button>
+          </Link>
           <Button
             variant="outline"
             size="icon"
-            className="h-11 w-11 border-foreground/10 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/20 transition-all shrink-0"
+            className="h-10 w-10 border-border/60 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors shrink-0"
             onClick={handleLogout}
             title="Sign Out"
           >
-            <LogOut className="h-5 w-5" />
+            <LogOut className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
       {/* Stats Section */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6 mb-8">
-        <Card className="border-none shadow-md ring-1 ring-foreground/5 bg-primary/5 col-span-2 md:col-span-1">
-          <CardHeader className="pb-2 p-4 sm:p-6">
-            <CardDescription className="text-[10px] sm:text-xs uppercase font-bold tracking-wider text-primary/70">
-              Total Jobs
-            </CardDescription>
-            <CardTitle className="text-2xl sm:text-3xl font-black">{stats.total}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="border-none shadow-md ring-1 ring-foreground/5 bg-green-500/5 p-4 sm:p-6">
-          <CardHeader className="p-0 pb-2">
-            <CardDescription className="text-[10px] sm:text-xs uppercase font-bold tracking-wider text-green-600/70">
-              Collected
-            </CardDescription>
-            <CardTitle className="text-2xl sm:text-3xl font-black text-green-600">
-              {stats.paid}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card className="border-none shadow-md ring-1 ring-foreground/5 bg-destructive/5 p-4 sm:p-6">
-          <CardHeader className="p-0 pb-2">
-            <CardDescription className="text-[10px] sm:text-xs uppercase font-bold tracking-wider text-destructive/70">
-              Borrowed
-            </CardDescription>
-            <CardTitle className="text-2xl sm:text-3xl font-black text-destructive">
-              ${stats.borrowed.toFixed(2)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+        {[
+          { label: "Total Jobs", value: stats.total, color: "text-foreground", bg: "bg-muted/40" },
+          { label: "Collected", value: stats.paid, color: "text-green-600", bg: "bg-green-500/5" },
+          { label: "Revenue", value: `$${stats.revenue.toFixed(2)}`, color: "text-primary", bg: "bg-primary/5" },
+          { label: "Borrowed", value: `$${stats.borrowed.toFixed(2)}`, color: "text-destructive", bg: "bg-destructive/5" },
+        ].map(({ label, value, color, bg }) => (
+          <Card key={label} className={cn("border border-border/50 shadow-sm", bg)}>
+            <CardHeader className="p-4">
+              <CardDescription className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">
+                {label}
+              </CardDescription>
+              <CardTitle className={cn("text-2xl font-black mt-1", color)}>
+                {value}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+        ))}
       </div>
 
       {/* Main Content */}
@@ -407,24 +388,30 @@ function AdminDashboard() {
 
       {/* Detail View Modal */}
       {selectedEntry && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <Card className="w-full max-w-lg shadow-2xl relative max-h-[90vh] flex flex-col border-foreground/10 overflow-hidden">
-            <CardHeader className="bg-muted/30 pb-4 border-b shrink-0 pr-12 p-4 sm:p-6">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-3 top-3 hover:bg-muted/80 rounded-full"
-                onClick={() => setSelectedEntry(null)}
-              >
-                <XCircle className="h-6 w-6 text-muted-foreground hover:text-foreground transition-colors" />
-              </Button>
-              <CardTitle className="text-xl font-bold break-words pr-4 text-foreground">
-                {selectedEntry.customerName}
-              </CardTitle>
-              <CardDescription className="font-medium text-sm mt-1 text-foreground/70">
-                Serviced by{" "}
-                <span className="font-bold text-foreground">{selectedEntry.employeeName}</span>
-              </CardDescription>
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+          onClick={(e) => { if (e.target === e.currentTarget) setSelectedEntry(null); }}
+        >
+          <Card className="w-full max-w-lg shadow-2xl relative max-h-[90vh] flex flex-col border-border/60 overflow-hidden animate-in zoom-in-95 duration-150">
+            <CardHeader className="pb-4 border-b shrink-0 p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <CardTitle className="text-lg font-bold text-foreground break-words">
+                    {selectedEntry.customerName}
+                  </CardTitle>
+                  <CardDescription className="text-sm mt-0.5">
+                    Serviced by <span className="font-semibold text-foreground">{selectedEntry.employeeName}</span>
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 h-8 w-8 rounded-lg hover:bg-muted"
+                  onClick={() => setSelectedEntry(null)}
+                >
+                  <XCircle className="h-4 w-4" />
+                </Button>
+              </div>
             </CardHeader>
 
             <CardContent className="overflow-y-auto p-4 sm:p-6 space-y-5 flex-1">

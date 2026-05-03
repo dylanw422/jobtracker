@@ -3,7 +3,6 @@ import { Button } from "@jobtracker/ui/components/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@jobtracker/ui/components/card";
@@ -19,7 +18,6 @@ import {
 } from "@jobtracker/ui/components/form";
 import { Input } from "@jobtracker/ui/components/input";
 import { Textarea } from "@jobtracker/ui/components/textarea";
-import { RadioGroup, RadioGroupItem } from "@jobtracker/ui/components/radio-group";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
@@ -28,8 +26,10 @@ import { toast } from "sonner";
 import * as z from "zod";
 import * as React from "react";
 import { format } from "date-fns";
-import { Clock, User, Landmark, Briefcase, UserCircle, CheckCircle2, Notebook } from "lucide-react";
+import { Clock, User, Landmark, Briefcase, UserCircle, CheckCircle2, FileText } from "lucide-react";
 import { cn } from "@jobtracker/ui/lib/utils";
+
+// ─── Time Input ──────────────────────────────────────────────────────────────
 
 function parseTime(value: string) {
   if (!value) return { h12: "", min: "", period: "AM" as "AM" | "PM" };
@@ -61,7 +61,6 @@ const TimeInput = React.forwardRef<HTMLInputElement, {
   const [minute, setMinute] = React.useState(initial.min);
   const [period, setPeriod] = React.useState<"AM" | "PM">(initial.period);
 
-  // Sync internal state when the form resets the value externally
   const prevValue = React.useRef(value);
   React.useEffect(() => {
     if (value !== prevValue.current) {
@@ -94,15 +93,14 @@ const TimeInput = React.forwardRef<HTMLInputElement, {
       aria-describedby={ariaDescribedBy}
       aria-invalid={ariaInvalid}
       className={cn(
-        "flex h-10 w-full items-center border border-input bg-transparent px-3 text-sm transition-colors focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/50 cursor-text",
-        ariaInvalid && "border-destructive ring-1 ring-destructive/20",
+        "flex h-11 w-full items-center border border-input bg-transparent px-3 text-sm transition-colors rounded-lg focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 cursor-text",
+        ariaInvalid && "border-destructive ring-2 ring-destructive/20",
         className
       )}
       onBlur={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) onBlur?.();
       }}
     >
-      {/* Hour */}
       <input
         ref={ref}
         type="text"
@@ -118,7 +116,6 @@ const TimeInput = React.forwardRef<HTMLInputElement, {
           if (v === "" || (n >= 1 && n <= 12)) {
             setHour(v);
             emit(v, minute, period);
-            // Auto-advance: hours 2-9 can only be 1 digit; length 2 is always done
             if (v.length === 2 || (n >= 2 && n <= 9)) {
               minuteRef.current?.focus();
               minuteRef.current?.select();
@@ -131,7 +128,6 @@ const TimeInput = React.forwardRef<HTMLInputElement, {
         }}
       />
       <span className="text-muted-foreground select-none mx-0.5">:</span>
-      {/* Minute */}
       <input
         ref={minuteRef}
         type="text"
@@ -154,7 +150,6 @@ const TimeInput = React.forwardRef<HTMLInputElement, {
           if (!isNaN(n)) setMinute(String(n).padStart(2, "0"));
         }}
       />
-      {/* AM/PM */}
       <select
         value={period}
         onChange={(e) => {
@@ -170,6 +165,21 @@ const TimeInput = React.forwardRef<HTMLInputElement, {
     </div>
   );
 });
+
+// ─── Section Header ───────────────────────────────────────────────────────────
+
+function SectionHeader({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10">
+        <Icon className="h-3.5 w-3.5 text-primary" />
+      </div>
+      <span className="text-sm font-semibold text-foreground">{label}</span>
+    </div>
+  );
+}
+
+// ─── Schema ───────────────────────────────────────────────────────────────────
 
 const formSchema = z.object({
   employeeName: z.string().min(2, "Name must be at least 2 characters"),
@@ -242,38 +252,43 @@ function HomeComponent() {
   }
 
   return (
-    <div className="container mx-auto max-w-2xl px-4 py-8">
-      <Card className="border-none shadow-lg ring-1 ring-foreground/5">
-        <CardHeader className="space-y-1 pb-8">
-          <div className="flex items-center gap-2 text-primary">
-            <Briefcase className="h-6 w-6" />
-            <CardTitle className="text-2xl font-bold tracking-tight">Daily Job Log</CardTitle>
-          </div>
-          <CardDescription className="text-base">
-            Record your work details for today.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              {/* Employee Section */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                  <User className="h-4 w-4" />
-                  Employee Information
+    <div className="container mx-auto max-w-xl px-4 py-6 pb-28">
+      <Card className="shadow-sm border border-border/60">
+        {/* Card Header */}
+        <CardHeader className="pb-6 pt-6 px-6">
+          <div className="flex items-start justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5">
+                <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary/10">
+                  <Briefcase className="h-5 w-5 text-primary" />
                 </div>
+                <CardTitle className="text-xl font-bold">Daily Job Log</CardTitle>
+              </div>
+              <p className="text-sm text-muted-foreground pl-11">
+                Record your work details for today.
+              </p>
+            </div>
+            <span className="text-xs font-medium text-muted-foreground bg-muted px-2.5 py-1 rounded-full shrink-0 mt-1">
+              {format(new Date(), "MMM d")}
+            </span>
+          </div>
+        </CardHeader>
+
+        <CardContent className="px-6 pb-6">
+          <Form {...form}>
+            <form id="daily-log" onSubmit={form.handleSubmit(onSubmit)} className="space-y-7">
+
+              {/* Employee */}
+              <div className="space-y-3">
+                <SectionHeader icon={User} label="Employee" />
                 <FormField
                   control={form.control}
                   name="employeeName"
                   render={({ field }: { field: any }) => (
                     <FormItem>
-                      <FormLabel>Your Name</FormLabel>
+                      <FormLabel className="text-xs font-medium text-muted-foreground">Your Name</FormLabel>
                       <FormControl>
-                        <Input
-                          placeholder="Enter your full name"
-                          className="h-10 text-sm"
-                          {...field}
-                        />
+                        <Input placeholder="Full name" className="h-11 rounded-lg" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -281,19 +296,18 @@ function HomeComponent() {
                 />
               </div>
 
-              {/* Time Section */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                  <Clock className="h-4 w-4" />
-                  Working Hours
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+              <div className="border-t border-border/50" />
+
+              {/* Working Hours */}
+              <div className="space-y-3">
+                <SectionHeader icon={Clock} label="Working Hours" />
+                <div className="grid grid-cols-2 gap-3">
                   <FormField
                     control={form.control}
                     name="startTime"
                     render={({ field }: { field: any }) => (
                       <FormItem>
-                        <FormLabel>Start Time</FormLabel>
+                        <FormLabel className="text-xs font-medium text-muted-foreground">Start</FormLabel>
                         <FormControl>
                           <TimeInput {...field} />
                         </FormControl>
@@ -306,7 +320,7 @@ function HomeComponent() {
                     name="endTime"
                     render={({ field }: { field: any }) => (
                       <FormItem>
-                        <FormLabel>End Time</FormLabel>
+                        <FormLabel className="text-xs font-medium text-muted-foreground">End</FormLabel>
                         <FormControl>
                           <TimeInput {...field} />
                         </FormControl>
@@ -317,37 +331,103 @@ function HomeComponent() {
                 </div>
               </div>
 
-              {/* Borrowing Section */}
-              <div className="space-y-4 rounded-xl bg-muted/30 p-4 ring-1 ring-foreground/5 transition-all">
-                <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                  <Landmark className="h-4 w-4" />
-                  Borrowing
-                </div>
+              <div className="border-t border-border/50" />
+
+              {/* Job Details */}
+              <div className="space-y-3">
+                <SectionHeader icon={UserCircle} label="Job Details" />
+                <FormField
+                  control={form.control}
+                  name="customerName"
+                  render={({ field }: { field: any }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-medium text-muted-foreground">Customer Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Customer's name" className="h-11 rounded-lg" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="jobDescription"
+                  render={({ field }: { field: any }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-medium text-muted-foreground">Work Description</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Describe the work performed today..."
+                          className="min-h-[90px] resize-none rounded-lg"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="customerPaid"
+                  render={({ field }: { field: any }) => (
+                    <FormItem>
+                      <FormControl>
+                        <label className={cn(
+                          "flex items-center gap-3 rounded-lg border p-4 cursor-pointer transition-colors",
+                          field.value
+                            ? "border-green-500/40 bg-green-500/5"
+                            : "border-border/60 hover:bg-muted/40"
+                        )}>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
+                          />
+                          <div className="space-y-0.5 leading-none">
+                            <div className="flex items-center gap-1.5 text-sm font-semibold">
+                              <CheckCircle2 className={cn("h-4 w-4", field.value ? "text-green-600" : "text-muted-foreground")} />
+                              Payment Collected
+                            </div>
+                            <p className="text-xs text-muted-foreground font-normal">
+                              Check if the customer paid in full.
+                            </p>
+                          </div>
+                        </label>
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="border-t border-border/50" />
+
+              {/* Borrowing */}
+              <div className="space-y-3">
+                <SectionHeader icon={Landmark} label="Borrowing" />
                 <FormField
                   control={form.control}
                   name="didBorrow"
                   render={({ field }: { field: any }) => (
-                    <FormItem className="space-y-3">
-                      <FormLabel>Did you borrow any money today?</FormLabel>
+                    <FormItem>
+                      <FormLabel className="text-xs font-medium text-muted-foreground">Did you borrow money today?</FormLabel>
                       <FormControl>
-                        <RadioGroup
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                          className="flex gap-4"
-                        >
-                          <FormItem className="flex items-center space-x-2 space-y-0">
-                            <FormControl>
-                              <RadioGroupItem value="no" />
-                            </FormControl>
-                            <FormLabel className="font-normal cursor-pointer">No</FormLabel>
-                          </FormItem>
-                          <FormItem className="flex items-center space-x-2 space-y-0">
-                            <FormControl>
-                              <RadioGroupItem value="yes" />
-                            </FormControl>
-                            <FormLabel className="font-normal cursor-pointer">Yes</FormLabel>
-                          </FormItem>
-                        </RadioGroup>
+                        <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted/50 border border-border/50">
+                          {(["no", "yes"] as const).map((val) => (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => field.onChange(val)}
+                              className={cn(
+                                "py-2 rounded-md text-sm font-medium transition-all",
+                                field.value === val
+                                  ? "bg-background shadow-sm text-foreground"
+                                  : "text-muted-foreground hover:text-foreground"
+                              )}
+                            >
+                              {val === "no" ? "No" : "Yes"}
+                            </button>
+                          ))}
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -355,15 +435,15 @@ function HomeComponent() {
                 />
 
                 {didBorrow === "yes" && (
-                  <div className="grid gap-4 pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="grid gap-3 animate-in fade-in slide-in-from-top-1 duration-200">
                     <FormField
                       control={form.control}
                       name="borrowedAmount"
                       render={({ field }: { field: any }) => (
                         <FormItem>
-                          <FormLabel>Amount Borrowed ($)</FormLabel>
+                          <FormLabel className="text-xs font-medium text-muted-foreground">Amount ($)</FormLabel>
                           <FormControl>
-                            <Input type="number" placeholder="0.00" className="h-10" {...field} />
+                            <Input type="number" placeholder="0.00" className="h-11 rounded-lg" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -374,13 +454,9 @@ function HomeComponent() {
                       name="borrowedNotes"
                       render={({ field }: { field: any }) => (
                         <FormItem>
-                          <FormLabel>Reason for Borrowing</FormLabel>
+                          <FormLabel className="text-xs font-medium text-muted-foreground">Reason</FormLabel>
                           <FormControl>
-                            <Input
-                              placeholder="What was the money for?"
-                              className="h-10"
-                              {...field}
-                            />
+                            <Input placeholder="What was the money for?" className="h-11 rounded-lg" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -390,82 +466,20 @@ function HomeComponent() {
                 )}
               </div>
 
-              {/* Customer & Job Section */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                  <UserCircle className="h-4 w-4" />
-                  Job Details
-                </div>
-                <FormField
-                  control={form.control}
-                  name="customerName"
-                  render={({ field }: { field: any }) => (
-                    <FormItem>
-                      <FormLabel>Customer Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter customer's name" className="h-10" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+              <div className="border-t border-border/50" />
 
-                <FormField
-                  control={form.control}
-                  name="jobDescription"
-                  render={({ field }: { field: any }) => (
-                    <FormItem>
-                      <FormLabel>Work Description</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="What work was performed today?"
-                          className="min-h-[100px] resize-none"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="customerPaid"
-                  render={({ field }: { field: any }) => (
-                    <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-lg border bg-background p-4 shadow-sm transition-colors hover:bg-accent/5">
-                      <FormControl>
-                        <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                      </FormControl>
-                      <div className="space-y-1 leading-none">
-                        <FormLabel className="flex items-center gap-2 cursor-pointer text-sm font-semibold">
-                          <CheckCircle2 className="h-4 w-4 text-green-600" />
-                          Payment Collected
-                        </FormLabel>
-                        <FormDescription className="text-xs">
-                          Check this only if the customer has paid in full.
-                        </FormDescription>
-                      </div>
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {/* Notes Section */}
-              <div className="space-y-4 pb-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                  <Notebook className="h-4 w-4" />
-                  Final Notes
-                </div>
+              {/* Notes */}
+              <div className="space-y-3">
+                <SectionHeader icon={FileText} label="Additional Notes" />
                 <FormField
                   control={form.control}
                   name="additionalNotes"
                   render={({ field }: { field: any }) => (
                     <FormItem>
-                      <FormLabel>Additional Comments (Optional)</FormLabel>
                       <FormControl>
                         <Textarea
-                          placeholder="Any issues or extra details to report..."
-                          className="min-h-[80px] resize-none"
+                          placeholder="Any issues or extra details to report... (optional)"
+                          className="min-h-[70px] resize-none rounded-lg"
                           {...field}
                         />
                       </FormControl>
@@ -475,21 +489,28 @@ function HomeComponent() {
                 />
               </div>
 
-              <Button
-                type="submit"
-                className="w-full h-12 text-base font-bold shadow-md hover:shadow-lg transition-all active:scale-[0.98]"
-              >
-                Submit Daily Report
-              </Button>
             </form>
           </Form>
         </CardContent>
       </Card>
-      <div className="mt-8 text-center flex flex-col gap-2 items-center text-xs text-muted-foreground pb-12">
-        <p>© {new Date().getFullYear()} Job Tracker App. All rights reserved.</p>
+
+      {/* Sticky submit bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur border-t border-border/60 px-4 py-3">
+        <div className="container mx-auto max-w-xl">
+          <Button
+            type="submit"
+            form="daily-log"
+            className="w-full h-12 text-base font-semibold rounded-xl"
+          >
+            Submit Daily Report
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-6 text-center pb-4">
         <Link
           to="/login"
-          className="hover:text-primary transition-colors underline underline-offset-4 decoration-muted-foreground/30"
+          className="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors"
         >
           Management Portal
         </Link>
