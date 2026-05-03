@@ -105,7 +105,7 @@ function ScrollColumn({
       ref={ref}
       onScroll={handleScroll}
       className={cn(
-        "overflow-y-scroll overscroll-contain snap-y snap-mandatory",
+        "overflow-y-scroll overflow-x-hidden overscroll-contain snap-y snap-mandatory",
         "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
         className,
       )}
