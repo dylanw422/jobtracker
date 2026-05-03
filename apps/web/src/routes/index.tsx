@@ -29,19 +29,114 @@ import { format } from "date-fns";
 import { Clock, User, Landmark, Briefcase, UserCircle, CheckCircle2, FileText } from "lucide-react";
 import { cn } from "@jobtracker/ui/lib/utils";
 
-// ─── Time Input ──────────────────────────────────────────────────────────────
+// ─── Time Scroll Picker ───────────────────────────────────────────────────────
 
-function parseTime(value: string) {
-  if (!value) return { h12: "", min: "", period: "AM" as "AM" | "PM" };
+const ITEM_H = 44;
+const HOURS   = ["1","2","3","4","5","6","7","8","9","10","11","12"];
+const MINUTES = ["00","05","10","15","20","25","30","35","40","45","50","55"];
+const PERIODS = ["AM","PM"];
+
+function parseTimePicker(value: string): { h12: string; min: string; period: "AM" | "PM" } {
+  const fallback = { h12: "12", min: "00", period: "AM" as const };
+  if (!value) return fallback;
   const [hs, ms] = value.split(":");
   const h24 = parseInt(hs, 10);
-  const m = parseInt(ms, 10);
-  if (isNaN(h24) || isNaN(m)) return { h12: "", min: "", period: "AM" as "AM" | "PM" };
+  const m   = parseInt(ms, 10);
+  if (isNaN(h24) || isNaN(m)) return fallback;
+  const rounded = Math.round(m / 5) * 5;
+  const minStr  = String(rounded >= 60 ? 0 : rounded).padStart(2, "0");
   return {
     h12: String(h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24),
-    min: String(m).padStart(2, "0"),
-    period: (h24 >= 12 ? "PM" : "AM") as "AM" | "PM",
+    min: minStr,
+    period: h24 >= 12 ? "PM" : "AM",
   };
+}
+
+function ScrollColumn({
+  items,
+  selected,
+  onSelect,
+  className,
+}: {
+  items: string[];
+  selected: string;
+  onSelect: (val: string) => void;
+  className?: string;
+}) {
+  const ref        = React.useRef<HTMLDivElement>(null);
+  const settling   = React.useRef(false);
+  const settleTimer = React.useRef<ReturnType<typeof setTimeout>>();
+
+  // Set position synchronously on first paint
+  React.useLayoutEffect(() => {
+    const idx = Math.max(0, items.indexOf(selected));
+    if (ref.current) ref.current.scrollTop = idx * ITEM_H;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Respond to external value changes (form reset)
+  const prevSelected = React.useRef(selected);
+  React.useEffect(() => {
+    if (selected === prevSelected.current || settling.current) return;
+    prevSelected.current = selected;
+    const idx = items.indexOf(selected);
+    if (idx >= 0 && ref.current) {
+      ref.current.scrollTo({ top: idx * ITEM_H, behavior: "smooth" });
+    }
+  }, [selected, items]);
+
+  const handleScroll = () => {
+    if (!ref.current) return;
+    settling.current = true;
+    clearTimeout(settleTimer.current);
+
+    const idx    = Math.round(ref.current.scrollTop / ITEM_H);
+    const clamped = Math.max(0, Math.min(idx, items.length - 1));
+    const val    = items[clamped];
+    if (val !== prevSelected.current) {
+      prevSelected.current = val;
+      onSelect(val);
+    }
+
+    settleTimer.current = setTimeout(() => { settling.current = false; }, 300);
+  };
+
+  return (
+    <div
+      ref={ref}
+      onScroll={handleScroll}
+      className={cn(
+        "overflow-y-scroll overscroll-contain snap-y snap-mandatory",
+        "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        className,
+      )}
+      style={{ height: ITEM_H * 3 }}
+    >
+      {/* top spacer so first item can centre */}
+      <div style={{ height: ITEM_H }} aria-hidden />
+      {items.map((item) => (
+        <div
+          key={item}
+          onClick={() => {
+            const idx = items.indexOf(item);
+            ref.current?.scrollTo({ top: idx * ITEM_H, behavior: "smooth" });
+            prevSelected.current = item;
+            onSelect(item);
+          }}
+          className={cn(
+            "flex items-center justify-center snap-center select-none transition-all duration-150 text-sm cursor-pointer",
+            item === selected
+              ? "text-foreground font-semibold scale-105"
+              : "text-muted-foreground/40",
+          )}
+          style={{ height: ITEM_H }}
+        >
+          {item}
+        </div>
+      ))}
+      {/* bottom spacer so last item can centre */}
+      <div style={{ height: ITEM_H }} aria-hidden />
+    </div>
+  );
 }
 
 const TimeInput = React.forwardRef<HTMLInputElement, {
@@ -54,38 +149,33 @@ const TimeInput = React.forwardRef<HTMLInputElement, {
   className?: string;
 }>(function TimeInput(
   { value = "", onChange, onBlur, id, "aria-describedby": ariaDescribedBy, "aria-invalid": ariaInvalid, className },
-  ref
+  ref,
 ) {
-  const initial = parseTime(value);
-  const [hour, setHour] = React.useState(initial.h12);
-  const [minute, setMinute] = React.useState(initial.min);
-  const [period, setPeriod] = React.useState<"AM" | "PM">(initial.period);
+  const parsed = parseTimePicker(value);
+  const [hour,   setHour]   = React.useState(parsed.h12);
+  const [minute, setMinute] = React.useState(parsed.min);
+  const [period, setPeriod] = React.useState<"AM" | "PM">(parsed.period);
 
+  // Sync on external value change (form reset)
   const prevValue = React.useRef(value);
   React.useEffect(() => {
-    if (value !== prevValue.current) {
-      prevValue.current = value;
-      const p = parseTime(value);
-      setHour(p.h12);
-      setMinute(p.min);
-      setPeriod(p.period);
-    }
+    if (value === prevValue.current) return;
+    prevValue.current = value;
+    const p = parseTimePicker(value);
+    setHour(p.h12);
+    setMinute(p.min);
+    setPeriod(p.period);
   }, [value]);
-
-  const minuteRef = React.useRef<HTMLInputElement>(null);
 
   const emit = (h: string, m: string, p: "AM" | "PM") => {
     const hNum = parseInt(h, 10);
     const mNum = parseInt(m, 10);
-    if (!h || !m || isNaN(hNum) || isNaN(mNum)) return;
-    if (hNum < 1 || hNum > 12 || mNum < 0 || mNum > 59) return;
+    if (isNaN(hNum) || isNaN(mNum)) return;
     let h24 = hNum;
     if (p === "AM") { if (h24 === 12) h24 = 0; }
-    else { if (h24 !== 12) h24 += 12; }
+    else            { if (h24 !== 12) h24 += 12; }
     onChange?.(`${String(h24).padStart(2, "0")}:${String(mNum).padStart(2, "0")}`);
   };
-
-  const segmentClass = "w-8 bg-transparent outline-none text-center tabular-nums placeholder:text-muted-foreground/60";
 
   return (
     <div
@@ -93,75 +183,57 @@ const TimeInput = React.forwardRef<HTMLInputElement, {
       aria-describedby={ariaDescribedBy}
       aria-invalid={ariaInvalid}
       className={cn(
-        "flex h-11 w-full items-center border border-input bg-transparent px-3 text-sm transition-colors rounded-lg focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 cursor-text",
-        ariaInvalid && "border-destructive ring-2 ring-destructive/20",
-        className
+        "relative flex w-full overflow-hidden rounded-xl border border-input bg-background",
+        ariaInvalid && "border-destructive",
+        className,
       )}
       onBlur={(e) => {
         if (!e.currentTarget.contains(e.relatedTarget as Node)) onBlur?.();
       }}
     >
-      <input
-        ref={ref}
-        type="text"
-        inputMode="numeric"
-        placeholder="12"
-        value={hour}
-        maxLength={2}
-        className={segmentClass}
-        onFocus={(e) => e.target.select()}
-        onChange={(e) => {
-          const v = e.target.value.replace(/\D/g, "");
-          const n = parseInt(v, 10);
-          if (v === "" || (n >= 1 && n <= 12)) {
-            setHour(v);
-            emit(v, minute, period);
-            if (v.length === 2 || (n >= 2 && n <= 9)) {
-              minuteRef.current?.focus();
-              minuteRef.current?.select();
-            }
-          }
-        }}
-        onBlur={() => {
-          const n = parseInt(hour, 10);
-          if (!isNaN(n) && n >= 1 && n <= 12) setHour(String(n));
-        }}
+      {/* Selection band */}
+      <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 border-y border-border/60 bg-muted/50 z-10"
+        style={{ height: ITEM_H }} />
+      {/* Gradient fades */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 bg-gradient-to-b from-background via-background/80 to-transparent"
+        style={{ height: ITEM_H }} />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-background via-background/80 to-transparent"
+        style={{ height: ITEM_H }} />
+
+      {/* Hours */}
+      <ScrollColumn
+        items={HOURS}
+        selected={hour}
+        onSelect={(h) => { setHour(h); emit(h, minute, period); }}
+        className="flex-1"
       />
-      <span className="text-muted-foreground select-none mx-0.5">:</span>
-      <input
-        ref={minuteRef}
-        type="text"
-        inputMode="numeric"
-        placeholder="00"
-        value={minute}
-        maxLength={2}
-        className={segmentClass}
-        onFocus={(e) => e.target.select()}
-        onChange={(e) => {
-          const v = e.target.value.replace(/\D/g, "");
-          const n = parseInt(v, 10);
-          if (v === "" || (n >= 0 && n <= 59)) {
-            setMinute(v);
-            emit(hour, v, period);
-          }
-        }}
-        onBlur={() => {
-          const n = parseInt(minute, 10);
-          if (!isNaN(n)) setMinute(String(n).padStart(2, "0"));
-        }}
+
+      {/* Separator */}
+      <div className="pointer-events-none z-20 flex items-center justify-center text-muted-foreground font-bold text-base select-none px-0.5">
+        :
+      </div>
+
+      {/* Minutes */}
+      <ScrollColumn
+        items={MINUTES}
+        selected={minute}
+        onSelect={(m) => { setMinute(m); emit(hour, m, period); }}
+        className="flex-1"
       />
-      <select
-        value={period}
-        onChange={(e) => {
-          const p = e.target.value as "AM" | "PM";
-          setPeriod(p);
-          emit(hour, minute, p);
-        }}
-        className="ml-2 bg-transparent outline-none cursor-pointer text-sm"
-      >
-        <option value="AM">AM</option>
-        <option value="PM">PM</option>
-      </select>
+
+      {/* Divider */}
+      <div className="z-20 my-3 w-px bg-border/50 self-stretch" />
+
+      {/* AM / PM */}
+      <ScrollColumn
+        items={PERIODS}
+        selected={period}
+        onSelect={(p) => { const pp = p as "AM" | "PM"; setPeriod(pp); emit(hour, minute, pp); }}
+        className="w-14"
+      />
+
+      {/* Hidden input so forwardRef lands somewhere */}
+      <input ref={ref} type="hidden" value={value} readOnly />
     </div>
   );
 });
