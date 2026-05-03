@@ -146,19 +146,18 @@ function HomeComponent() {
                   Working Hours
                 </div>
                 {/* 
-                  FIX: Switched to flex layout with min-w-0 on the inputs.
-                  min-w-0 overrides browser native minimum widths for time inputs 
-                  ensuring they never stretch past their flex container.
+                  FIX: Using grid-cols-1 sm:grid-cols-2 (Grid automatically contains children tightly). 
+                  Added "block max-w-full" to override flex-based stretching in time inputs.
                 */}
-                <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 w-full">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="startTime"
                     render={({ field }: { field: any }) => (
-                      <FormItem className="flex-1 w-full min-w-0">
+                      <FormItem>
                         <FormLabel>Start Time</FormLabel>
                         <FormControl>
-                          <Input type="time" className="h-10 w-full min-w-0" {...field} />
+                          <Input type="time" className="block h-10 w-full max-w-full" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -168,10 +167,10 @@ function HomeComponent() {
                     control={form.control}
                     name="endTime"
                     render={({ field }: { field: any }) => (
-                      <FormItem className="flex-1 w-full min-w-0">
+                      <FormItem>
                         <FormLabel>End Time</FormLabel>
                         <FormControl>
-                          <Input type="time" className="h-10 w-full min-w-0" {...field} />
+                          <Input type="time" className="block h-10 w-full max-w-full" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
