@@ -145,16 +145,20 @@ function HomeComponent() {
                   <Clock className="h-4 w-4" />
                   Working Hours
                 </div>
-                {/* CHANGED: Replaced grid-cols-2 with grid-cols-1 sm:grid-cols-2 */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                {/* 
+                  FIX: Switched to flex layout with min-w-0 on the inputs.
+                  min-w-0 overrides browser native minimum widths for time inputs 
+                  ensuring they never stretch past their flex container.
+                */}
+                <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 w-full">
                   <FormField
                     control={form.control}
                     name="startTime"
                     render={({ field }: { field: any }) => (
-                      <FormItem>
+                      <FormItem className="flex-1 w-full min-w-0">
                         <FormLabel>Start Time</FormLabel>
                         <FormControl>
-                          <Input type="time" className="h-10 w-full" {...field} />
+                          <Input type="time" className="h-10 w-full min-w-0" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -164,10 +168,10 @@ function HomeComponent() {
                     control={form.control}
                     name="endTime"
                     render={({ field }: { field: any }) => (
-                      <FormItem>
+                      <FormItem className="flex-1 w-full min-w-0">
                         <FormLabel>End Time</FormLabel>
                         <FormControl>
-                          <Input type="time" className="h-10 w-full" {...field} />
+                          <Input type="time" className="h-10 w-full min-w-0" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
