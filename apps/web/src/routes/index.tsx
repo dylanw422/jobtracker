@@ -31,43 +31,62 @@ import { format } from "date-fns";
 import { Clock, User, Landmark, Briefcase, UserCircle, CheckCircle2, Notebook } from "lucide-react";
 import { cn } from "@jobtracker/ui/lib/utils";
 
-const HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1));
-const MINUTES = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
+function parseTime(value: string) {
+  if (!value) return { h12: "", min: "", period: "AM" as "AM" | "PM" };
+  const [hs, ms] = value.split(":");
+  const h24 = parseInt(hs, 10);
+  const m = parseInt(ms, 10);
+  if (isNaN(h24) || isNaN(m)) return { h12: "", min: "", period: "AM" as "AM" | "PM" };
+  return {
+    h12: String(h24 === 0 ? 12 : h24 > 12 ? h24 - 12 : h24),
+    min: String(m).padStart(2, "0"),
+    period: (h24 >= 12 ? "PM" : "AM") as "AM" | "PM",
+  };
+}
 
-function TimeInput({
-  value = "",
-  onChange,
-  id,
-  "aria-describedby": ariaDescribedBy,
-  "aria-invalid": ariaInvalid,
-  className,
-}: {
+const TimeInput = React.forwardRef<HTMLInputElement, {
   value?: string;
   onChange?: (val: string) => void;
+  onBlur?: () => void;
   id?: string;
   "aria-describedby"?: string;
   "aria-invalid"?: boolean | "true" | "false";
   className?: string;
-}) {
-  const parsed = React.useMemo(() => {
-    if (!value) return { h12: "12", min: "00", period: "AM" };
-    const [h, m] = value.split(":").map(Number);
-    return {
-      h12: String(h === 0 ? 12 : h > 12 ? h - 12 : h),
-      min: String(m).padStart(2, "0"),
-      period: h >= 12 ? "PM" : "AM",
-    };
+}>(function TimeInput(
+  { value = "", onChange, onBlur, id, "aria-describedby": ariaDescribedBy, "aria-invalid": ariaInvalid, className },
+  ref
+) {
+  const initial = parseTime(value);
+  const [hour, setHour] = React.useState(initial.h12);
+  const [minute, setMinute] = React.useState(initial.min);
+  const [period, setPeriod] = React.useState<"AM" | "PM">(initial.period);
+
+  // Sync internal state when the form resets the value externally
+  const prevValue = React.useRef(value);
+  React.useEffect(() => {
+    if (value !== prevValue.current) {
+      prevValue.current = value;
+      const p = parseTime(value);
+      setHour(p.h12);
+      setMinute(p.min);
+      setPeriod(p.period);
+    }
   }, [value]);
 
-  const emit = (h12: string, min: string, period: string) => {
-    let h = parseInt(h12, 10);
-    if (period === "AM") { if (h === 12) h = 0; }
-    else { if (h !== 12) h += 12; }
-    onChange?.(`${String(h).padStart(2, "0")}:${min}`);
+  const minuteRef = React.useRef<HTMLInputElement>(null);
+
+  const emit = (h: string, m: string, p: "AM" | "PM") => {
+    const hNum = parseInt(h, 10);
+    const mNum = parseInt(m, 10);
+    if (!h || !m || isNaN(hNum) || isNaN(mNum)) return;
+    if (hNum < 1 || hNum > 12 || mNum < 0 || mNum > 59) return;
+    let h24 = hNum;
+    if (p === "AM") { if (h24 === 12) h24 = 0; }
+    else { if (h24 !== 12) h24 += 12; }
+    onChange?.(`${String(h24).padStart(2, "0")}:${String(mNum).padStart(2, "0")}`);
   };
 
-  const selectClass =
-    "min-w-0 flex-1 bg-transparent outline-none appearance-none cursor-pointer text-center";
+  const segmentClass = "w-8 bg-transparent outline-none text-center tabular-nums placeholder:text-muted-foreground/60";
 
   return (
     <div
@@ -75,41 +94,82 @@ function TimeInput({
       aria-describedby={ariaDescribedBy}
       aria-invalid={ariaInvalid}
       className={cn(
-        "flex h-10 w-full items-center gap-1 border border-input bg-transparent px-3 text-sm transition-colors focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/50",
+        "flex h-10 w-full items-center border border-input bg-transparent px-3 text-sm transition-colors focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/50 cursor-text",
         ariaInvalid && "border-destructive ring-1 ring-destructive/20",
         className
       )}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) onBlur?.();
+      }}
     >
+      {/* Hour */}
+      <input
+        ref={ref}
+        type="text"
+        inputMode="numeric"
+        placeholder="12"
+        value={hour}
+        maxLength={2}
+        className={segmentClass}
+        onFocus={(e) => e.target.select()}
+        onChange={(e) => {
+          const v = e.target.value.replace(/\D/g, "");
+          const n = parseInt(v, 10);
+          if (v === "" || (n >= 1 && n <= 12)) {
+            setHour(v);
+            emit(v, minute, period);
+            // Auto-advance: hours 2-9 can only be 1 digit; length 2 is always done
+            if (v.length === 2 || (n >= 2 && n <= 9)) {
+              minuteRef.current?.focus();
+              minuteRef.current?.select();
+            }
+          }
+        }}
+        onBlur={() => {
+          const n = parseInt(hour, 10);
+          if (!isNaN(n) && n >= 1 && n <= 12) setHour(String(n));
+        }}
+      />
+      <span className="text-muted-foreground select-none mx-0.5">:</span>
+      {/* Minute */}
+      <input
+        ref={minuteRef}
+        type="text"
+        inputMode="numeric"
+        placeholder="00"
+        value={minute}
+        maxLength={2}
+        className={segmentClass}
+        onFocus={(e) => e.target.select()}
+        onChange={(e) => {
+          const v = e.target.value.replace(/\D/g, "");
+          const n = parseInt(v, 10);
+          if (v === "" || (n >= 0 && n <= 59)) {
+            setMinute(v);
+            emit(hour, v, period);
+          }
+        }}
+        onBlur={() => {
+          const n = parseInt(minute, 10);
+          if (!isNaN(n)) setMinute(String(n).padStart(2, "0"));
+        }}
+      />
+      {/* AM/PM */}
       <select
-        value={parsed.h12}
-        onChange={(e) => emit(e.target.value, parsed.min, parsed.period)}
-        className={selectClass}
-      >
-        {HOURS.map((h) => (
-          <option key={h} value={h}>{h}</option>
-        ))}
-      </select>
-      <span className="text-muted-foreground select-none">:</span>
-      <select
-        value={parsed.min}
-        onChange={(e) => emit(parsed.h12, e.target.value, parsed.period)}
-        className={selectClass}
-      >
-        {MINUTES.map((m) => (
-          <option key={m} value={m}>{m}</option>
-        ))}
-      </select>
-      <select
-        value={parsed.period}
-        onChange={(e) => emit(parsed.h12, parsed.min, e.target.value)}
-        className="bg-transparent outline-none appearance-none cursor-pointer text-center"
+        value={period}
+        onChange={(e) => {
+          const p = e.target.value as "AM" | "PM";
+          setPeriod(p);
+          emit(hour, minute, p);
+        }}
+        className="ml-2 bg-transparent outline-none cursor-pointer text-sm"
       >
         <option value="AM">AM</option>
         <option value="PM">PM</option>
       </select>
     </div>
   );
-}
+});
 
 const formSchema = z.object({
   employeeName: z.string().min(2, "Name must be at least 2 characters"),

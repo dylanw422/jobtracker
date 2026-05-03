@@ -94,6 +94,12 @@ function AdminDashboard() {
 
   // IMPORTANT: Ensure you have an 'updatePayment' mutation in your Convex backend that takes { id, paidAmount }
   const updatePayment = useMutation(api.entries.updatePayment);
+  const updateBorrowed = useMutation(api.entries.updateBorrowed);
+
+  // Borrowed editing state
+  const [borrowedAmountInput, setBorrowedAmountInput] = React.useState("");
+  const [borrowedNotesInput, setBorrowedNotesInput] = React.useState("");
+  const [isSavingBorrowed, setIsSavingBorrowed] = React.useState(false);
 
   React.useEffect(() => {
     if (!isAdmin) {
@@ -101,14 +107,18 @@ function AdminDashboard() {
     }
   }, [isAdmin, navigate]);
 
-  // Lock body scroll when modal is open and reset payment state
+  // Lock body scroll when modal is open and reset payment/borrowed state
   React.useEffect(() => {
     if (selectedEntry) {
       document.body.style.overflow = "hidden";
-      setPaymentAmount(selectedEntry.paidAmount?.toString() || "");
+      setPaymentAmount(selectedEntry.payment?.toString() || "");
+      setBorrowedAmountInput(selectedEntry.borrowedAmount?.toString() || "0");
+      setBorrowedNotesInput(selectedEntry.borrowedNotes || "");
     } else {
       document.body.style.overflow = "unset";
       setPaymentAmount("");
+      setBorrowedAmountInput("");
+      setBorrowedNotesInput("");
     }
     return () => {
       document.body.style.overflow = "unset";
@@ -155,12 +165,8 @@ function AdminDashboard() {
     setIsSavingPayment(true);
     try {
       const parsedAmount = parseFloat(paymentAmount) || 0;
-      await updatePayment({
-        id: selectedEntry._id,
-        paidAmount: parsedAmount,
-      });
-      // Update local state to reflect the change immediately
-      setSelectedEntry({ ...selectedEntry, paidAmount: parsedAmount });
+      await updatePayment({ id: selectedEntry._id, paidAmount: parsedAmount });
+      setSelectedEntry({ ...selectedEntry, payment: parsedAmount });
     } catch (error) {
       console.error("Failed to update payment", error);
     } finally {
@@ -168,10 +174,34 @@ function AdminDashboard() {
     }
   };
 
+  const handleSaveBorrowed = async () => {
+    if (!selectedEntry) return;
+    setIsSavingBorrowed(true);
+    try {
+      const amount = parseFloat(borrowedAmountInput) || 0;
+      await updateBorrowed({
+        id: selectedEntry._id,
+        borrowedAmount: amount,
+        borrowedNotes: borrowedNotesInput,
+      });
+      setSelectedEntry({
+        ...selectedEntry,
+        borrowedAmount: amount,
+        borrowedNotes: borrowedNotesInput,
+      });
+    } catch (error) {
+      console.error("Failed to update borrowed amount", error);
+    } finally {
+      setIsSavingBorrowed(false);
+    }
+  };
+
   if (!isAdmin) return null;
 
-  // Determine if the input has changed from the saved database value
-  const isPaymentDirty = Number(paymentAmount) !== Number(selectedEntry?.paidAmount || 0);
+  const isPaymentDirty = Number(paymentAmount) !== Number(selectedEntry?.payment ?? 0);
+  const isBorrowedDirty =
+    parseFloat(borrowedAmountInput) !== (selectedEntry?.borrowedAmount ?? 0) ||
+    borrowedNotesInput !== (selectedEntry?.borrowedNotes ?? "");
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl pb-24">
@@ -322,13 +352,8 @@ function AdminDashboard() {
                       <TableCell className="py-4 px-4 align-top w-full">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                           <div>
-                            <div className="font-bold text-sm sm:text-base text-foreground break-words pr-2 flex items-center gap-2">
+                            <div className="font-bold text-sm sm:text-base text-foreground break-words pr-2">
                               {entry.customerName}
-                              {entry.paidAmount > 0 && (
-                                <span className="inline-flex text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-sm">
-                                  ${entry.paidAmount.toFixed(2)}
-                                </span>
-                              )}
                             </div>
                             <div className="text-[11px] sm:text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5 flex-wrap">
                               <span className="font-semibold text-foreground/80 flex items-center gap-1">
@@ -346,8 +371,11 @@ function AdminDashboard() {
                           <div className="flex items-center justify-between sm:justify-end gap-3 mt-2 sm:mt-0">
                             <div className="flex items-center gap-2">
                               {entry.customerPaid ? (
-                                <span className="inline-flex items-center text-green-600 bg-green-500/10 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide">
+                                <span className="inline-flex items-center gap-1 text-green-600 bg-green-500/10 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide">
                                   Paid
+                                  {entry.payment > 0 && (
+                                    <span className="normal-case">· ${entry.payment.toFixed(2)}</span>
+                                  )}
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center text-destructive bg-destructive/10 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide">
@@ -355,9 +383,8 @@ function AdminDashboard() {
                                 </span>
                               )}
                               {entry.borrowedAmount > 0 && (
-                                <span className="text-[11px] font-bold text-destructive flex items-center bg-destructive/5 px-2 py-0.5 rounded">
-                                  <DollarSign className="h-3 w-3" />
-                                  {entry.borrowedAmount.toFixed(2)}
+                                <span className="text-[10px] font-bold text-destructive flex items-center gap-1 bg-destructive/5 px-2 py-0.5 rounded uppercase tracking-wide">
+                                  Borrowed · ${entry.borrowedAmount.toFixed(2)}
                                 </span>
                               )}
                             </div>
@@ -460,23 +487,40 @@ function AdminDashboard() {
                 </div>
               </div>
 
-              {/* Borrowed Finances block */}
-              {selectedEntry.borrowedAmount > 0 && (
-                <div className="bg-destructive/5 p-4 rounded-xl space-y-2 border border-destructive/10">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-bold text-destructive">Borrowed Amount</span>
-                    <span className="text-lg font-black text-destructive flex items-center gap-0.5">
-                      <DollarSign className="h-4 w-4" />
-                      {selectedEntry.borrowedAmount.toFixed(2)}
-                    </span>
-                  </div>
-                  {selectedEntry.borrowedNotes && (
-                    <p className="text-xs text-destructive/80 italic font-medium">
-                      "{selectedEntry.borrowedNotes}"
-                    </p>
-                  )}
+              {/* Borrowed Finances block — always editable */}
+              <div className="bg-destructive/5 p-4 rounded-xl border border-destructive/10 space-y-3">
+                <div className="text-[10px] font-bold text-destructive uppercase tracking-wider">
+                  Borrowed Amount
                 </div>
-              )}
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      className="pl-9 h-10 bg-background border-destructive/20 focus:border-destructive/50 font-medium"
+                      value={borrowedAmountInput}
+                      onChange={(e) => setBorrowedAmountInput(e.target.value)}
+                    />
+                  </div>
+                  <Button
+                    onClick={handleSaveBorrowed}
+                    disabled={isSavingBorrowed || !isBorrowedDirty}
+                    variant="destructive"
+                    className="h-10 min-w-[80px]"
+                  >
+                    {isSavingBorrowed ? "Saving..." : isBorrowedDirty ? "Save" : "Saved"}
+                  </Button>
+                </div>
+                <Input
+                  placeholder="Reason for borrowing..."
+                  className="h-10 bg-background border-destructive/20 focus:border-destructive/50 text-sm"
+                  value={borrowedNotesInput}
+                  onChange={(e) => setBorrowedNotesInput(e.target.value)}
+                />
+              </div>
 
               {/* Descriptions */}
               <div className="space-y-2">

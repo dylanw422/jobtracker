@@ -35,16 +35,29 @@ export const getByDate = query({
 
 export const updatePayment = mutation({
   args: {
-    id: v.id("jobEntries"), // Strongly type the ID to your table
+    id: v.id("jobEntries"),
     paidAmount: v.number(),
   },
   handler: async (ctx, args) => {
     const entry = await ctx.db.get(args.id);
-
     if (!entry) throw new Error("Entry not found");
-
     await ctx.db.patch(args.id, { payment: args.paidAmount });
-
     return args.paidAmount;
+  },
+});
+
+export const updateBorrowed = mutation({
+  args: {
+    id: v.id("jobEntries"),
+    borrowedAmount: v.number(),
+    borrowedNotes: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const entry = await ctx.db.get(args.id);
+    if (!entry) throw new Error("Entry not found");
+    await ctx.db.patch(args.id, {
+      borrowedAmount: args.borrowedAmount,
+      borrowedNotes: args.borrowedNotes,
+    });
   },
 });
