@@ -26,8 +26,90 @@ import { useMutation } from "convex/react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import * as z from "zod";
+import * as React from "react";
 import { format } from "date-fns";
 import { Clock, User, Landmark, Briefcase, UserCircle, CheckCircle2, Notebook } from "lucide-react";
+import { cn } from "@jobtracker/ui/lib/utils";
+
+const HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1));
+const MINUTES = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
+
+function TimeInput({
+  value = "",
+  onChange,
+  id,
+  "aria-describedby": ariaDescribedBy,
+  "aria-invalid": ariaInvalid,
+  className,
+}: {
+  value?: string;
+  onChange?: (val: string) => void;
+  id?: string;
+  "aria-describedby"?: string;
+  "aria-invalid"?: boolean | "true" | "false";
+  className?: string;
+}) {
+  const parsed = React.useMemo(() => {
+    if (!value) return { h12: "12", min: "00", period: "AM" };
+    const [h, m] = value.split(":").map(Number);
+    return {
+      h12: String(h === 0 ? 12 : h > 12 ? h - 12 : h),
+      min: String(m).padStart(2, "0"),
+      period: h >= 12 ? "PM" : "AM",
+    };
+  }, [value]);
+
+  const emit = (h12: string, min: string, period: string) => {
+    let h = parseInt(h12, 10);
+    if (period === "AM") { if (h === 12) h = 0; }
+    else { if (h !== 12) h += 12; }
+    onChange?.(`${String(h).padStart(2, "0")}:${min}`);
+  };
+
+  const selectClass =
+    "min-w-0 flex-1 bg-transparent outline-none appearance-none cursor-pointer text-center";
+
+  return (
+    <div
+      id={id}
+      aria-describedby={ariaDescribedBy}
+      aria-invalid={ariaInvalid}
+      className={cn(
+        "flex h-10 w-full items-center gap-1 border border-input bg-transparent px-3 text-sm transition-colors focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/50",
+        ariaInvalid && "border-destructive ring-1 ring-destructive/20",
+        className
+      )}
+    >
+      <select
+        value={parsed.h12}
+        onChange={(e) => emit(e.target.value, parsed.min, parsed.period)}
+        className={selectClass}
+      >
+        {HOURS.map((h) => (
+          <option key={h} value={h}>{h}</option>
+        ))}
+      </select>
+      <span className="text-muted-foreground select-none">:</span>
+      <select
+        value={parsed.min}
+        onChange={(e) => emit(parsed.h12, e.target.value, parsed.period)}
+        className={selectClass}
+      >
+        {MINUTES.map((m) => (
+          <option key={m} value={m}>{m}</option>
+        ))}
+      </select>
+      <select
+        value={parsed.period}
+        onChange={(e) => emit(parsed.h12, parsed.min, e.target.value)}
+        className="bg-transparent outline-none appearance-none cursor-pointer text-center"
+      >
+        <option value="AM">AM</option>
+        <option value="PM">PM</option>
+      </select>
+    </div>
+  );
+}
 
 const formSchema = z.object({
   employeeName: z.string().min(2, "Name must be at least 2 characters"),
@@ -145,19 +227,15 @@ function HomeComponent() {
                   <Clock className="h-4 w-4" />
                   Working Hours
                 </div>
-                {/* 
-                  FIX: Using grid-cols-1 sm:grid-cols-2 (Grid automatically contains children tightly). 
-                  Added "block max-w-full" to override flex-based stretching in time inputs.
-                */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="startTime"
                     render={({ field }: { field: any }) => (
-                      <FormItem className="min-w-0">
+                      <FormItem>
                         <FormLabel>Start Time</FormLabel>
                         <FormControl>
-                          <Input type="time" className="block h-10 w-full min-w-0" {...field} />
+                          <TimeInput {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -167,10 +245,10 @@ function HomeComponent() {
                     control={form.control}
                     name="endTime"
                     render={({ field }: { field: any }) => (
-                      <FormItem className="min-w-0">
+                      <FormItem>
                         <FormLabel>End Time</FormLabel>
                         <FormControl>
-                          <Input type="time" className="block h-10 w-full min-w-0" {...field} />
+                          <TimeInput {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
