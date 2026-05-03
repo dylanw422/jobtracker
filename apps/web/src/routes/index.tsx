@@ -154,10 +154,10 @@ function HomeComponent() {
                     control={form.control}
                     name="startTime"
                     render={({ field }: { field: any }) => (
-                      <FormItem>
+                      <FormItem className="min-w-0">
                         <FormLabel>Start Time</FormLabel>
                         <FormControl>
-                          <Input type="time" className="block h-10 w-full max-w-full" {...field} />
+                          <Input type="time" className="block h-10 w-full min-w-0" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -167,10 +167,10 @@ function HomeComponent() {
                     control={form.control}
                     name="endTime"
                     render={({ field }: { field: any }) => (
-                      <FormItem>
+                      <FormItem className="min-w-0">
                         <FormLabel>End Time</FormLabel>
                         <FormControl>
-                          <Input type="time" className="block h-10 w-full max-w-full" {...field} />
+                          <Input type="time" className="block h-10 w-full min-w-0" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
