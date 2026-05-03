@@ -145,7 +145,8 @@ function HomeComponent() {
                   <Clock className="h-4 w-4" />
                   Working Hours
                 </div>
-                <div className="grid grid-cols-2 gap-6">
+                {/* CHANGED: Replaced grid-cols-2 with grid-cols-1 sm:grid-cols-2 */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <FormField
                     control={form.control}
                     name="startTime"
@@ -153,7 +154,7 @@ function HomeComponent() {
                       <FormItem>
                         <FormLabel>Start Time</FormLabel>
                         <FormControl>
-                          <Input type="time" className="h-10" {...field} />
+                          <Input type="time" className="h-10 w-full" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -166,7 +167,7 @@ function HomeComponent() {
                       <FormItem>
                         <FormLabel>End Time</FormLabel>
                         <FormControl>
-                          <Input type="time" className="h-10" {...field} />
+                          <Input type="time" className="h-10 w-full" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
