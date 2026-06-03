@@ -465,7 +465,7 @@ function HomeComponent() {
       </Card>
 
       {/* Sticky Clock In / Clock Out bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur border-t border-border/60 px-4 py-3">
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur border-t border-border/60 px-4 pt-3 pb-12">
         <div className="container mx-auto max-w-xl">
           {isClockedIn ? (
             <Button
