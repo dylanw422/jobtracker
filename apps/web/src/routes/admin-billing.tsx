@@ -1,5 +1,5 @@
 import { api } from "@jobtracker/backend/convex/_generated/api";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { ArrowLeft, CheckCircle2, Circle, DollarSign, MapPin } from "lucide-react";
 import * as React from "react";
@@ -18,6 +18,7 @@ type CustomerGroup = {
 
 function BillingSummary() {
   const entries = useQuery(api.entries.getAll, {});
+  const navigate = useNavigate();
   const [tab, setTab] = React.useState<"paid" | "unpaid">("unpaid");
 
   const groups = React.useMemo(() => {
@@ -61,11 +62,12 @@ function BillingSummary() {
     <div className="container mx-auto px-4 py-8 max-w-3xl pb-16">
       {/* Header */}
       <div className="mb-6 flex items-center gap-3">
-        <Link to="/admin">
-          <button className="flex items-center justify-center w-9 h-9 rounded-lg border border-border/60 hover:bg-muted/50 transition-colors">
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-        </Link>
+        <button
+          onClick={() => navigate({ to: "/admin" })}
+          className="flex items-center justify-center w-9 h-9 rounded-lg border border-border/60 hover:bg-muted/50 transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Billing Summary</h1>
           <p className="text-sm text-muted-foreground mt-0.5">All-time paid & unpaid customers</p>

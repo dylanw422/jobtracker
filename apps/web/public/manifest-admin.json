@@ -2,7 +2,7 @@
   "name": "Admin",
   "short_name": "Admin",
   "description": "Management portal for Job Tracker",
-  "start_url": "/login",
+  "start_url": "/admin",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#b91c1c",

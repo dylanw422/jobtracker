@@ -9,26 +9,14 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AdminSettingsRouteImport } from './routes/admin-settings'
 import { Route as AdminBillingRouteImport } from './routes/admin-billing'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminSettingsRoute = AdminSettingsRouteImport.update({
-  id: '/admin-settings',
-  path: '/admin-settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminBillingRoute = AdminBillingRouteImport.update({
@@ -51,78 +39,43 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/admin-billing': typeof AdminBillingRoute
-  '/admin-settings': typeof AdminSettingsRoute
   '/auth': typeof AuthRoute
-  '/login': typeof LoginRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/admin-billing': typeof AdminBillingRoute
-  '/admin-settings': typeof AdminSettingsRoute
   '/auth': typeof AuthRoute
-  '/login': typeof LoginRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/admin-billing': typeof AdminBillingRoute
-  '/admin-settings': typeof AdminSettingsRoute
   '/auth': typeof AuthRoute
-  '/login': typeof LoginRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/admin'
-    | '/admin-billing'
-    | '/admin-settings'
-    | '/auth'
-    | '/login'
+  fullPaths: '/' | '/admin' | '/admin-billing' | '/auth'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/admin-billing' | '/admin-settings' | '/auth' | '/login'
-  id:
-    | '__root__'
-    | '/'
-    | '/admin'
-    | '/admin-billing'
-    | '/admin-settings'
-    | '/auth'
-    | '/login'
+  to: '/' | '/admin' | '/admin-billing' | '/auth'
+  id: '__root__' | '/' | '/admin' | '/admin-billing' | '/auth'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   AdminBillingRoute: typeof AdminBillingRoute
-  AdminSettingsRoute: typeof AdminSettingsRoute
   AuthRoute: typeof AuthRoute
-  LoginRoute: typeof LoginRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/auth': {
       id: '/auth'
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin-settings': {
-      id: '/admin-settings'
-      path: '/admin-settings'
-      fullPath: '/admin-settings'
-      preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin-billing': {
@@ -153,9 +106,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   AdminBillingRoute: AdminBillingRoute,
-  AdminSettingsRoute: AdminSettingsRoute,
   AuthRoute: AuthRoute,
-  LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

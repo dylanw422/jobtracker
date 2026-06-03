@@ -3,7 +3,6 @@ import { HeadContent, Outlet, createRootRouteWithContext, useLocation } from "@t
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import * as React from "react";
 
-import Header from "@/components/header";
 import { ThemeProvider } from "@/components/theme-provider";
 
 import "../index.css";
@@ -23,7 +22,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 
 // ─── Manifest + PWA meta switcher ────────────────────────────────────────────
 
-const ADMIN_PATHS = ["/login", "/admin", "/admin-settings"];
+const ADMIN_PATHS = ["/admin"];
 
 function ManifestSwitcher() {
   const location = useLocation();
@@ -91,8 +90,7 @@ function RootComponent() {
         storageKey="vite-ui-theme"
       >
         <ManifestSwitcher />
-        <div className="grid grid-rows-[auto_1fr] h-svh">
-          <Header />
+        <div className="h-svh overflow-auto">
           <Outlet />
         </div>
         <Toaster richColors />
