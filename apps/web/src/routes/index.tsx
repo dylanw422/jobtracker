@@ -25,6 +25,7 @@ import * as React from "react";
 import { format } from "date-fns";
 import { Briefcase, Landmark, UserCircle } from "lucide-react";
 import { cn } from "@jobtracker/ui/lib/utils";
+import { LOUISIANA_CITIES, CITY_NAMES } from "@/data/louisiana-cities";
 
 function SectionHeader({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
   return (
@@ -37,10 +38,11 @@ function SectionHeader({ icon: Icon, label }: { icon: React.ElementType; label: 
   );
 }
 
-
 const formSchema = z.object({
   customerName: z.string().min(2, "Customer name is required"),
-  customerAddress: z.string().min(3, "Address is required"),
+  customerStreet: z.string().min(3, "Street address is required"),
+  customerCity: z.string().min(2, "City is required"),
+  customerZip: z.string().regex(/^\d{5}$/, "Select a ZIP code"),
   didBorrow: z.enum(["yes", "no"]).default("no"),
   borrowedAmount: z.coerce.number().min(0).optional(),
   borrowedNotes: z.string().optional(),
@@ -49,6 +51,131 @@ const formSchema = z.object({
 export const Route = createFileRoute("/")({
   component: HomeComponent,
 });
+
+function toTitleCase(str: string): string {
+  return str
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// ─── City Autocomplete ────────────────────────────────────────────────────────
+
+function CityAutocomplete({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (city: string) => void;
+  disabled: boolean;
+}) {
+  const [query, setQuery] = React.useState(value);
+  const [open, setOpen] = React.useState(false);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  const suggestions = React.useMemo(() => {
+    if (!query.trim()) return [];
+    const q = query.toLowerCase();
+    return CITY_NAMES.filter((c) => c.toLowerCase().startsWith(q)).slice(0, 8);
+  }, [query]);
+
+  React.useEffect(() => {
+    setQuery(value);
+  }, [value]);
+
+  React.useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  function handleSelect(city: string) {
+    setQuery(city);
+    onChange(city);
+    setOpen(false);
+  }
+
+  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value;
+    setQuery(val);
+    onChange(val);
+    setOpen(true);
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <Input
+        value={query}
+        onChange={handleInputChange}
+        onFocus={() => query.trim() && setOpen(true)}
+        placeholder="Start typing a city..."
+        className="h-11 rounded-lg"
+        disabled={disabled}
+        autoComplete="off"
+      />
+      {open && suggestions.length > 0 && (
+        <div className="absolute z-50 left-0 right-0 top-full mt-1 rounded-lg border border-border/60 bg-background shadow-lg overflow-hidden">
+          {suggestions.map((city) => (
+            <button
+              key={city}
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => handleSelect(city)}
+              className="w-full text-left px-4 py-2.5 text-sm hover:bg-muted/60 transition-colors"
+            >
+              {city}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ZIP Select ───────────────────────────────────────────────────────────────
+
+function ZipSelect({
+  city,
+  value,
+  onChange,
+  disabled,
+}: {
+  city: string;
+  value: string;
+  onChange: (zip: string) => void;
+  disabled: boolean;
+}) {
+  const zips = LOUISIANA_CITIES[city] ?? [];
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled || zips.length === 0}
+      className={cn(
+        "h-11 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground transition-colors",
+        "focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-0",
+        "disabled:cursor-not-allowed disabled:opacity-50"
+      )}
+    >
+      <option value="">
+        {zips.length === 0 ? "Select a city first" : "Select ZIP code"}
+      </option>
+      {zips.map((zip) => (
+        <option key={zip} value={zip}>
+          {zip}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 function HomeComponent() {
   const navigate = useNavigate();
@@ -66,7 +193,6 @@ function HomeComponent() {
     if (!user) navigate({ to: "/auth" });
   }, [user, navigate]);
 
-  // Clock state
   const [clockInTime, setClockInTime] = React.useState<number | null>(() => {
     const stored = localStorage.getItem("clock_in_time");
     return stored ? parseInt(stored, 10) : null;
@@ -76,7 +202,9 @@ function HomeComponent() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       customerName: "",
-      customerAddress: "",
+      customerStreet: "",
+      customerCity: "",
+      customerZip: "",
       didBorrow: "no",
       borrowedAmount: 0,
       borrowedNotes: "",
@@ -84,10 +212,17 @@ function HomeComponent() {
   });
 
   const customerName = form.watch("customerName");
-  const customerAddress = form.watch("customerAddress");
+  const customerStreet = form.watch("customerStreet");
+  const customerCity = form.watch("customerCity");
+  const customerZip = form.watch("customerZip");
   const didBorrow = form.watch("didBorrow");
   const isClockedIn = clockInTime !== null;
-  const canClockIn = customerName.trim().length >= 2 && customerAddress.trim().length >= 3;
+
+  const canClockIn =
+    customerName.trim().length >= 2 &&
+    customerStreet.trim().length >= 3 &&
+    LOUISIANA_CITIES[customerCity] !== undefined &&
+    /^\d{5}$/.test(customerZip);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!user) return;
@@ -101,21 +236,25 @@ function HomeComponent() {
         borrowedAmount: values.didBorrow === "yes" ? (values.borrowedAmount ?? 0) : 0,
         borrowedNotes: values.didBorrow === "yes" ? (values.borrowedNotes ?? "") : "",
         jobDescription: "",
-        customerName: values.customerName,
-        customerAddress: values.customerAddress,
+        customerName: toTitleCase(values.customerName),
+        customerStreet: toTitleCase(values.customerStreet),
+        customerCity: values.customerCity,
+        customerState: "LA",
+        customerZip: values.customerZip,
         customerPaid: false,
         additionalNotes: "",
         entryDate: format(new Date(), "yyyy-MM-dd"),
         payment: 0,
       });
-      // Start the clock after successful submit
       localStorage.setItem("clock_in_time", String(now));
       localStorage.setItem("current_entry_id", String(entryId));
       setClockInTime(now);
       toast.success("Clocked in!");
       form.reset({
         customerName: "",
-        customerAddress: "",
+        customerStreet: "",
+        customerCity: "",
+        customerZip: "",
         didBorrow: "no",
         borrowedAmount: 0,
         borrowedNotes: "",
@@ -182,6 +321,7 @@ function HomeComponent() {
               {/* Customer Info */}
               <div className="space-y-3">
                 <SectionHeader icon={UserCircle} label="Customer" />
+
                 <FormField
                   control={form.control}
                   name="customerName"
@@ -195,14 +335,56 @@ function HomeComponent() {
                     </FormItem>
                   )}
                 />
+
                 <FormField
                   control={form.control}
-                  name="customerAddress"
+                  name="customerStreet"
                   render={({ field }: { field: any }) => (
                     <FormItem>
-                      <FormLabel className="text-xs font-medium text-muted-foreground">Address</FormLabel>
+                      <FormLabel className="text-xs font-medium text-muted-foreground">Street Address</FormLabel>
                       <FormControl>
-                        <Input placeholder="123 Main St, City, State" className="h-11 rounded-lg" disabled={isClockedIn} {...field} />
+                        <Input placeholder="123 Main St" className="h-11 rounded-lg" disabled={isClockedIn} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="customerCity"
+                  render={({ field }: { field: any }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-medium text-muted-foreground">City</FormLabel>
+                      <FormControl>
+                        <CityAutocomplete
+                          value={field.value}
+                          onChange={(city) => {
+                            field.onChange(city);
+                            // Reset zip when city changes
+                            form.setValue("customerZip", "");
+                          }}
+                          disabled={isClockedIn}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="customerZip"
+                  render={({ field }: { field: any }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-medium text-muted-foreground">ZIP Code</FormLabel>
+                      <FormControl>
+                        <ZipSelect
+                          city={customerCity}
+                          value={field.value}
+                          onChange={field.onChange}
+                          disabled={isClockedIn}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

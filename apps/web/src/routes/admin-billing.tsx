@@ -16,6 +16,16 @@ type CustomerGroup = {
   allPaid: boolean;
 };
 
+function fmtAddress(entry: any): string {
+  if (entry.customerStreet) {
+    const line2 = [entry.customerCity, entry.customerState, entry.customerZip]
+      .filter(Boolean)
+      .join(", ");
+    return line2 ? `${entry.customerStreet}, ${line2}` : entry.customerStreet;
+  }
+  return entry.customerAddress ?? "";
+}
+
 function BillingSummary() {
   const entries = useQuery(api.entries.getAll, {});
   const navigate = useNavigate();
@@ -26,10 +36,13 @@ function BillingSummary() {
 
     const map = new Map<string, { entries: any[] }>();
     for (const entry of entries) {
-      const key =
-        entry.customerName.toLowerCase().trim() +
-        "||" +
-        (entry.customerAddress ?? "").toLowerCase().trim();
+      const key = [
+        entry.customerName,
+        entry.customerStreet ?? entry.customerAddress ?? "",
+        entry.customerCity ?? "",
+        entry.customerState ?? "",
+        entry.customerZip ?? "",
+      ].map((s) => s.toLowerCase().trim()).join("||");
       if (!map.has(key)) map.set(key, { entries: [] });
       map.get(key)!.entries.push(entry);
     }
@@ -41,7 +54,7 @@ function BillingSummary() {
       const payment = Math.max(...groupEntries.map((e) => e.payment ?? 0));
       result.push({
         customerName: sample.customerName,
-        customerAddress: sample.customerAddress ?? "",
+        customerAddress: fmtAddress(sample),
         payment,
         allPaid,
       });

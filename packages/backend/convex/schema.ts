@@ -11,6 +11,10 @@ export default defineSchema({
     jobDescription: v.string(),
     customerName: v.string(),
     customerAddress: v.optional(v.string()),
+    customerStreet: v.optional(v.string()),
+    customerCity: v.optional(v.string()),
+    customerState: v.optional(v.string()), // always "LA" for new entries
+    customerZip: v.optional(v.string()),
     customerPaid: v.boolean(),
     additionalNotes: v.string(),
     entryDate: v.string(), // ISO date YYYY-MM-DD

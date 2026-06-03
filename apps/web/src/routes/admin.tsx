@@ -49,6 +49,16 @@ function durationMins(startTime: string, endTime: string): number | null {
   return mins;
 }
 
+function fmtAddress(entry: any): string {
+  if (entry.customerStreet) {
+    const line2 = [entry.customerCity, entry.customerState, entry.customerZip]
+      .filter(Boolean)
+      .join(", ");
+    return line2 ? `${entry.customerStreet}, ${line2}` : entry.customerStreet;
+  }
+  return entry.customerAddress ?? "";
+}
+
 function fmtMins(mins: number): string {
   const h = Math.floor(mins / 60);
   const m = mins % 60;
@@ -290,9 +300,9 @@ function EmployeesTab({
                           <p className="text-sm font-semibold text-foreground truncate">
                             {entry.customerName}
                           </p>
-                          {entry.customerAddress && (
+                          {fmtAddress(entry) && (
                             <p className="text-xs text-muted-foreground truncate">
-                              {entry.customerAddress}
+                              {fmtAddress(entry)}
                             </p>
                           )}
                           {entry.borrowedAmount > 0 && (
@@ -355,13 +365,16 @@ function CustomersTab({
     );
   }
 
-  // Group entries by customer name + address
+  // Group entries by customer name + structured address fields
   const groups = new Map<string, any[]>();
   for (const entry of entries) {
-    const key =
-      entry.customerName.toLowerCase().trim() +
-      "||" +
-      (entry.customerAddress ?? "").toLowerCase().trim();
+    const key = [
+      entry.customerName,
+      entry.customerStreet ?? entry.customerAddress ?? "",
+      entry.customerCity ?? "",
+      entry.customerState ?? "",
+      entry.customerZip ?? "",
+    ].map((s) => s.toLowerCase().trim()).join("||");
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(entry);
   }
@@ -454,8 +467,8 @@ function CustomerGroup({
           </div>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground">{sample.customerName}</p>
-            {sample.customerAddress && (
-              <p className="text-xs text-muted-foreground">{sample.customerAddress}</p>
+            {fmtAddress(sample) && (
+              <p className="text-xs text-muted-foreground">{fmtAddress(sample)}</p>
             )}
           </div>
         </div>
