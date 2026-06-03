@@ -1,0 +1,24 @@
+{
+  "name": "Job Tracker",
+  "short_name": "Job Tracker",
+  "description": "Daily job entry and time tracking for employees",
+  "start_url": "/auth",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#6d28d9",
+  "background_color": "#09090b",
+  "icons": [
+    {
+      "src": "/icon-worker.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-worker.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

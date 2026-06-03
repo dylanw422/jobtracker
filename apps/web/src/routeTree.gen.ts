@@ -10,7 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdminSettingsRouteImport } from './routes/admin-settings'
+import { Route as AdminBillingRouteImport } from './routes/admin-billing'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 
@@ -19,9 +21,19 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
   id: '/admin-settings',
   path: '/admin-settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminBillingRoute = AdminBillingRouteImport.update({
+  id: '/admin-billing',
+  path: '/admin-billing',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -38,34 +50,55 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/admin-billing': typeof AdminBillingRoute
   '/admin-settings': typeof AdminSettingsRoute
+  '/auth': typeof AuthRoute
   '/login': typeof LoginRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/admin-billing': typeof AdminBillingRoute
   '/admin-settings': typeof AdminSettingsRoute
+  '/auth': typeof AuthRoute
   '/login': typeof LoginRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/admin-billing': typeof AdminBillingRoute
   '/admin-settings': typeof AdminSettingsRoute
+  '/auth': typeof AuthRoute
   '/login': typeof LoginRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/admin' | '/admin-settings' | '/login'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/admin-billing'
+    | '/admin-settings'
+    | '/auth'
+    | '/login'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/admin-settings' | '/login'
-  id: '__root__' | '/' | '/admin' | '/admin-settings' | '/login'
+  to: '/' | '/admin' | '/admin-billing' | '/admin-settings' | '/auth' | '/login'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/admin-billing'
+    | '/admin-settings'
+    | '/auth'
+    | '/login'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
+  AdminBillingRoute: typeof AdminBillingRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
+  AuthRoute: typeof AuthRoute
   LoginRoute: typeof LoginRoute
 }
 
@@ -78,11 +111,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin-settings': {
       id: '/admin-settings'
       path: '/admin-settings'
       fullPath: '/admin-settings'
       preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin-billing': {
+      id: '/admin-billing'
+      path: '/admin-billing'
+      fullPath: '/admin-billing'
+      preLoaderRoute: typeof AdminBillingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -105,7 +152,9 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  AdminBillingRoute: AdminBillingRoute,
   AdminSettingsRoute: AdminSettingsRoute,
+  AuthRoute: AuthRoute,
   LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport

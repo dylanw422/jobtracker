@@ -11,6 +11,7 @@
 import type * as entries from "../entries.js";
 import type * as healthCheck from "../healthCheck.js";
 import type * as settings from "../settings.js";
+import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -22,6 +23,7 @@ declare const fullApi: ApiFromModules<{
   entries: typeof entries;
   healthCheck: typeof healthCheck;
   settings: typeof settings;
+  users: typeof users;
 }>;
 
 /**

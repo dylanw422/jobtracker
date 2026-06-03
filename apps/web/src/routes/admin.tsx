@@ -1,542 +1,533 @@
 import { api } from "@jobtracker/backend/convex/_generated/api";
 import { Button } from "@jobtracker/ui/components/button";
-import { Calendar } from "@jobtracker/ui/components/calendar";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@jobtracker/ui/components/card";
-import { Popover, PopoverContent, PopoverTrigger } from "@jobtracker/ui/components/popover";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@jobtracker/ui/components/table";
+import { Input } from "@jobtracker/ui/components/input";
 import { cn } from "@jobtracker/ui/lib/utils";
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation } from "convex/react";
-import { format } from "date-fns";
+import { format, addWeeks, startOfWeek, endOfWeek } from "date-fns";
 import {
-  CalendarIcon,
-  LogOut,
-  Users,
-  Search,
-  DollarSign,
-  CheckCircle,
-  XCircle,
-  Settings,
+  ChevronDown,
   ChevronRight,
+  ChevronLeft,
+  Users,
+  MapPin,
+  DollarSign,
   Clock,
-  User,
+  CheckCircle2,
+  Circle,
 } from "lucide-react";
 import * as React from "react";
-import { Input } from "@jobtracker/ui/components/input";
 
 export const Route = createFileRoute("/admin")({
   component: AdminDashboard,
 });
 
-// Helper function to calculate duration between two time strings (e.g. "08:00 AM" to "10:30 AM")
-const calculateDuration = (startTime?: string, endTime?: string) => {
-  if (!startTime || !endTime) return "N/A";
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-  const parseTime = (timeStr: string) => {
-    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM|am|pm)?/);
-    if (!match) return NaN;
-    let hours = parseInt(match[1], 10);
-    const minutes = parseInt(match[2], 10);
-    const modifier = match[3]?.toUpperCase();
-
-    if (modifier === "AM" && hours === 12) hours = 0;
-    if (modifier === "PM" && hours < 12) hours += 12;
-
-    return hours * 60 + minutes;
+function getWeekRange(weekOffset: number) {
+  const base = addWeeks(new Date(), weekOffset);
+  const sun = startOfWeek(base, { weekStartsOn: 0 });
+  const sat = endOfWeek(base, { weekStartsOn: 0 });
+  return {
+    start: format(sun, "yyyy-MM-dd"),
+    end: format(sat, "yyyy-MM-dd"),
+    label: `${format(sun, "MMM d")} – ${format(sat, "MMM d, yyyy")}`,
   };
+}
 
-  const startMins = parseTime(startTime);
-  let endMins = parseTime(endTime);
+function durationMins(startTime: string, endTime: string): number | null {
+  if (!startTime || !endTime) return null;
+  const [sh, sm] = startTime.split(":").map(Number);
+  const [eh, em] = endTime.split(":").map(Number);
+  if ([sh, sm, eh, em].some(isNaN)) return null;
+  let mins = eh * 60 + em - (sh * 60 + sm);
+  if (mins < 0) mins += 24 * 60;
+  return mins;
+}
 
-  if (isNaN(startMins) || isNaN(endMins)) {
-    return "N/A";
-  }
-
-  // Handle overnight shifts if end time is earlier than start time
-  if (endMins < startMins) {
-    endMins += 24 * 60;
-  }
-
-  const diffMins = endMins - startMins;
-  const h = Math.floor(diffMins / 60);
-  const m = diffMins % 60;
-
+function fmtMins(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
   if (h > 0 && m > 0) return `${h}h ${m}m`;
   if (h > 0) return `${h}h`;
   return `${m}m`;
-};
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 function AdminDashboard() {
-  const [date, setDate] = React.useState<Date>(new Date());
-  const [searchTerm, setSearchTerm] = React.useState("");
-  const [selectedEntry, setSelectedEntry] = React.useState<any>(null);
+  const [tab, setTab] = React.useState<"employees" | "customers">("employees");
+  const [weekOffset, setWeekOffset] = React.useState(0);
+  const [expandedUser, setExpandedUser] = React.useState<string | null>(null);
 
-  // States for payment input
-  const [paymentAmount, setPaymentAmount] = React.useState("");
-  const [isSavingPayment, setIsSavingPayment] = React.useState(false);
+  const { start, end, label } = getWeekRange(weekOffset);
 
-  const navigate = useNavigate();
+  const users = useQuery(api.users.list, {});
+  const entries = useQuery(api.entries.getByDateRange, {
+    startDate: start,
+    endDate: end,
+  });
 
-  const isAdmin = typeof window !== "undefined" && localStorage.getItem("admin_session") === "true";
+  const userMap = new Map<string, any>();
+  (users ?? []).forEach((u: any) => userMap.set(u._id, u));
 
-  // IMPORTANT: Ensure you have an 'updatePayment' mutation in your Convex backend that takes { id, paidAmount }
-  const updatePayment = useMutation(api.entries.updatePayment);
-  const updateBorrowed = useMutation(api.entries.updateBorrowed);
+  const entriesByUser = new Map<string, any[]>();
+  (entries ?? []).forEach((e: any) => {
+    const key = e.userId ?? e.employeeName;
+    if (!entriesByUser.has(key)) entriesByUser.set(key, []);
+    entriesByUser.get(key)!.push(e);
+  });
 
-  // Borrowed editing state
-  const [borrowedAmountInput, setBorrowedAmountInput] = React.useState("");
-  const [borrowedNotesInput, setBorrowedNotesInput] = React.useState("");
-  const [isSavingBorrowed, setIsSavingBorrowed] = React.useState(false);
+  function totalMinsForUser(userEntries: any[]): number {
+    return userEntries.reduce((sum, e) => {
+      const m = durationMins(e.startTime, e.endTime);
+      return sum + (m ?? 0);
+    }, 0);
+  }
 
-  React.useEffect(() => {
-    if (!isAdmin) {
-      navigate({ to: "/login" });
-    }
-  }, [isAdmin, navigate]);
-
-  // Lock body scroll when modal is open and reset payment/borrowed state
-  React.useEffect(() => {
-    if (selectedEntry) {
-      document.body.style.overflow = "hidden";
-      setPaymentAmount(selectedEntry.payment?.toString() || "");
-      setBorrowedAmountInput(selectedEntry.borrowedAmount?.toString() || "0");
-      setBorrowedNotesInput(selectedEntry.borrowedNotes || "");
-    } else {
-      document.body.style.overflow = "unset";
-      setPaymentAmount("");
-      setBorrowedAmountInput("");
-      setBorrowedNotesInput("");
-    }
-    return () => {
-      document.body.style.overflow = "unset";
-    };
-  }, [selectedEntry]);
-
-  const formattedDate = React.useMemo(() => {
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    return d.toISOString().split("T")[0];
-  }, [date]);
-
-  const entries = useQuery(api.entries.getByDate, { entryDate: formattedDate });
-
-  const filteredEntries = React.useMemo(() => {
-    if (!entries) return [];
-    return entries.filter(
-      (entry: any) =>
-        entry.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.jobDescription.toLowerCase().includes(searchTerm.toLowerCase()),
-    );
-  }, [entries, searchTerm]);
-
-  const stats = React.useMemo(() => {
-    if (!entries) return { total: 0, paid: 0, borrowed: 0, revenue: 0 };
-    return entries.reduce(
-      (acc: any, curr: any) => ({
-        total: acc.total + 1,
-        paid: acc.paid + (curr.customerPaid ? 1 : 0),
-        borrowed: acc.borrowed + (curr.borrowedAmount > 0 ? curr.borrowedAmount : 0),
-        revenue: acc.revenue + (curr.payment > 0 ? curr.payment : 0),
-      }),
-      { total: 0, paid: 0, borrowed: 0, revenue: 0 },
-    );
-  }, [entries]);
-
-  const handleLogout = () => {
-    localStorage.removeItem("admin_session");
-    navigate({ to: "/" });
-  };
-
-  const handleSavePayment = async () => {
-    if (!selectedEntry) return;
-    setIsSavingPayment(true);
-    try {
-      const parsedAmount = parseFloat(paymentAmount) || 0;
-      await updatePayment({ id: selectedEntry._id, paidAmount: parsedAmount });
-      setSelectedEntry({ ...selectedEntry, payment: parsedAmount });
-    } catch (error) {
-      console.error("Failed to update payment", error);
-    } finally {
-      setIsSavingPayment(false);
-    }
-  };
-
-  const handleSaveBorrowed = async () => {
-    if (!selectedEntry) return;
-    setIsSavingBorrowed(true);
-    try {
-      const amount = parseFloat(borrowedAmountInput) || 0;
-      await updateBorrowed({
-        id: selectedEntry._id,
-        borrowedAmount: amount,
-        borrowedNotes: borrowedNotesInput,
-      });
-      setSelectedEntry({
-        ...selectedEntry,
-        borrowedAmount: amount,
-        borrowedNotes: borrowedNotesInput,
-      });
-    } catch (error) {
-      console.error("Failed to update borrowed amount", error);
-    } finally {
-      setIsSavingBorrowed(false);
-    }
-  };
-
-  if (!isAdmin) return null;
-
-  const isPaymentDirty = Number(paymentAmount) !== Number(selectedEntry?.payment ?? 0);
-  const isBorrowedDirty =
-    parseFloat(borrowedAmountInput) !== (selectedEntry?.borrowedAmount ?? 0) ||
-    borrowedNotesInput !== (selectedEntry?.borrowedNotes ?? "");
+  const loading = users === undefined || entries === undefined;
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl pb-24">
-      {/* Header Section */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="container mx-auto px-4 py-8 max-w-3xl pb-16">
+      {/* Page header */}
+      <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-            Management
-          </h1>
-          <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-1.5">
-            <Users className="h-3.5 w-3.5" />
-            {format(date, "EEEE, MMMM d, yyyy")}
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight">Management Portal</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Week of {label}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className="flex-1 sm:flex-none sm:w-auto h-10 gap-2 border-border/60 font-medium text-sm"
-              >
-                <CalendarIcon className="h-4 w-4 text-primary" />
-                {format(date, "MMM d, yyyy")}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0 shadow-xl" align="end">
-              <Calendar
-                mode="single"
-                selected={date}
-                onSelect={(d) => d && setDate(d)}
-                initialFocus
-              />
-            </PopoverContent>
-          </Popover>
-          <Link to="/admin-settings">
-            <Button variant="outline" size="icon" className="h-10 w-10 border-border/60" title="Settings">
-              <Settings className="h-4 w-4" />
-            </Button>
-          </Link>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-10 w-10 border-border/60 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors shrink-0"
-            onClick={handleLogout}
-            title="Sign Out"
-          >
-            <LogOut className="h-4 w-4" />
+        <Link to="/admin-billing">
+          <Button className="h-11 px-5 gap-2 rounded-xl bg-white text-black hover:bg-white/90 text-sm font-semibold">
+            <DollarSign className="h-4 w-4" />
+            Billing
           </Button>
-        </div>
+        </Link>
       </div>
 
-      {/* Stats Section */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-        {[
-          { label: "Total Jobs", value: stats.total, color: "text-foreground", bg: "bg-muted/40" },
-          { label: "Collected", value: stats.paid, color: "text-green-600", bg: "bg-green-500/5" },
-          { label: "Revenue", value: `$${stats.revenue.toFixed(2)}`, color: "text-primary", bg: "bg-primary/5" },
-          { label: "Borrowed", value: `$${stats.borrowed.toFixed(2)}`, color: "text-destructive", bg: "bg-destructive/5" },
-        ].map(({ label, value, color, bg }) => (
-          <Card key={label} className={cn("border border-border/50 shadow-sm", bg)}>
-            <CardHeader className="p-4">
-              <CardDescription className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground">
-                {label}
-              </CardDescription>
-              <CardTitle className={cn("text-2xl font-black mt-1", color)}>
-                {value}
-              </CardTitle>
-            </CardHeader>
-          </Card>
+      {/* Week navigation */}
+      <div className="flex items-center justify-between mb-5">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5 text-xs border-border/60"
+          onClick={() => setWeekOffset((w) => w - 1)}
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+          Prev Week
+        </Button>
+        <button
+          className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+          onClick={() => setWeekOffset(0)}
+        >
+          {weekOffset === 0 ? "This Week" : "Jump to Today"}
+        </button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5 text-xs border-border/60"
+          onClick={() => setWeekOffset((w) => w + 1)}
+          disabled={weekOffset >= 0}
+        >
+          Next Week
+          <ChevronRight className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      {/* Tabs */}
+      <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted/50 border border-border/50 mb-6">
+        {(["employees", "customers"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={cn(
+              "py-2 rounded-md text-sm font-medium transition-all",
+              tab === t
+                ? "bg-background shadow-sm text-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {t === "employees" ? (
+              <span className="flex items-center justify-center gap-2">
+                <Users className="h-3.5 w-3.5" /> Employees
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <MapPin className="h-3.5 w-3.5" /> Customers
+              </span>
+            )}
+          </button>
         ))}
       </div>
 
-      {/* Main Content */}
-      <Card className="border-none shadow-xl ring-1 ring-foreground/5 overflow-hidden">
-        <CardHeader className="bg-muted/30 pb-4 sm:pb-6 p-4 sm:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <CardTitle className="text-lg sm:text-xl font-bold">Entry Records</CardTitle>
-              <CardDescription className="text-xs sm:text-sm font-medium">
-                {filteredEntries.length} entries found
-              </CardDescription>
-            </div>
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search records..."
-                className="pl-10 h-10 border-foreground/10 focus:ring-primary/20 bg-background"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {entries === undefined ? (
-            <div className="flex h-64 flex-col items-center justify-center gap-4">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-              <p className="text-muted-foreground font-medium">Fetching job entries...</p>
-            </div>
-          ) : filteredEntries.length === 0 ? (
-            <div className="flex h-64 flex-col items-center justify-center text-center p-8">
-              <Search className="h-12 w-12 text-muted-foreground/30 mb-4" />
-              <p className="text-lg font-semibold text-muted-foreground">No records found</p>
-              <p className="text-sm text-muted-foreground/70 max-w-xs mt-1">
-                Try selecting a different date or adjusting your search term.
-              </p>
-            </div>
-          ) : (
-            <div className="w-full">
-              <Table className="w-full">
-                <TableHeader className="bg-muted/50 hidden sm:table-header-group">
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="py-3 px-4 font-bold text-foreground">
-                      Job Details
-                    </TableHead>
-                    <TableHead className="py-3 px-4 font-bold text-foreground text-right">
-                      Status
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredEntries.map((entry: any) => (
-                    <TableRow
-                      key={entry._id}
-                      onClick={() => setSelectedEntry(entry)}
-                      className="group cursor-pointer transition-colors hover:bg-muted/30 border-b border-foreground/5 active:bg-muted/50"
-                    >
-                      <TableCell className="py-4 px-4 align-top w-full">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                          <div>
-                            <div className="font-bold text-sm sm:text-base text-foreground break-words pr-2">
-                              {entry.customerName}
-                            </div>
-                            <div className="text-[11px] sm:text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5 flex-wrap">
-                              <span className="font-semibold text-foreground/80 flex items-center gap-1">
-                                <User className="h-3 w-3" />
-                                {entry.employeeName}
-                              </span>
-                              <span className="opacity-50">•</span>
-                              <span className="flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {calculateDuration(entry.startTime, entry.endTime)}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between sm:justify-end gap-3 mt-2 sm:mt-0">
-                            <div className="flex items-center gap-2">
-                              {entry.customerPaid ? (
-                                <span className="inline-flex items-center gap-1 text-green-600 bg-green-500/10 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide">
-                                  Paid
-                                  {entry.payment > 0 && (
-                                    <span className="normal-case">· ${entry.payment.toFixed(2)}</span>
-                                  )}
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center text-destructive bg-destructive/10 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide">
-                                  Unpaid
-                                </span>
-                              )}
-                              {entry.borrowedAmount > 0 && (
-                                <span className="text-[10px] font-bold text-destructive flex items-center gap-1 bg-destructive/5 px-2 py-0.5 rounded uppercase tracking-wide">
-                                  Borrowed · ${entry.borrowedAmount.toFixed(2)}
-                                </span>
-                              )}
-                            </div>
-                            <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-foreground transition-colors" />
-                          </div>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <footer className="mt-8 text-center text-xs text-muted-foreground/60 font-medium">
-        <p>Job Tracker Management Portal • v1.2.0</p>
-      </footer>
-
-      {/* Detail View Modal */}
-      {selectedEntry && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-150"
-          onClick={(e) => { if (e.target === e.currentTarget) setSelectedEntry(null); }}
-        >
-          <Card className="w-full max-w-lg shadow-2xl relative max-h-[90vh] flex flex-col border-border/60 overflow-hidden animate-in zoom-in-95 duration-150">
-            <CardHeader className="pb-4 border-b shrink-0 p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <CardTitle className="text-lg font-bold text-foreground break-words">
-                    {selectedEntry.customerName}
-                  </CardTitle>
-                  <CardDescription className="text-sm mt-0.5">
-                    Serviced by <span className="font-semibold text-foreground">{selectedEntry.employeeName}</span>
-                  </CardDescription>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0 h-8 w-8 rounded-lg hover:bg-muted"
-                  onClick={() => setSelectedEntry(null)}
-                >
-                  <XCircle className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardHeader>
-
-            <CardContent className="overflow-y-auto p-4 sm:p-6 space-y-5 flex-1">
-              {/* Top Meta Stats */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-muted/40 p-3 rounded-xl border border-foreground/5 flex flex-col justify-center">
-                  <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">
-                    Time Worked
-                  </div>
-                  <div className="text-sm font-semibold text-foreground">
-                    {calculateDuration(selectedEntry.startTime, selectedEntry.endTime)}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">
-                    {selectedEntry.startTime} - {selectedEntry.endTime}
-                  </div>
-                </div>
-
-                <div className="bg-muted/40 p-3 rounded-xl border border-foreground/5 flex flex-col justify-center">
-                  <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">
-                    Customer Paid Status
-                  </div>
-                  <div>
-                    {selectedEntry.customerPaid ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-bold text-green-600 bg-green-500/10 px-2 py-1 rounded-md">
-                        <CheckCircle className="h-3.5 w-3.5" /> PAID
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs font-bold text-destructive bg-destructive/10 px-2 py-1 rounded-md">
-                        <XCircle className="h-3.5 w-3.5" /> UNPAID
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Admin Payment Controls */}
-              <div className="bg-primary/5 p-4 rounded-xl border border-primary/10 space-y-3">
-                <div className="text-[10px] font-bold text-primary uppercase tracking-wider">
-                  Compensation / Job Revenue
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder="0.00"
-                      className="pl-9 h-10 bg-background border-primary/20 focus:border-primary/50 font-medium"
-                      value={paymentAmount}
-                      onChange={(e) => setPaymentAmount(e.target.value)}
-                    />
-                  </div>
-                  <Button
-                    onClick={handleSavePayment}
-                    disabled={isSavingPayment || !isPaymentDirty}
-                    className="h-10 min-w-[80px]"
-                  >
-                    {isSavingPayment ? "Saving..." : isPaymentDirty ? "Save" : "Saved"}
-                  </Button>
-                </div>
-              </div>
-
-              {/* Borrowed Finances block — always editable */}
-              <div className="bg-destructive/5 p-4 rounded-xl border border-destructive/10 space-y-3">
-                <div className="text-[10px] font-bold text-destructive uppercase tracking-wider">
-                  Borrowed Amount
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="0.00"
-                      className="pl-9 h-10 bg-background border-destructive/20 focus:border-destructive/50 font-medium"
-                      value={borrowedAmountInput}
-                      onChange={(e) => setBorrowedAmountInput(e.target.value)}
-                    />
-                  </div>
-                  <Button
-                    onClick={handleSaveBorrowed}
-                    disabled={isSavingBorrowed || !isBorrowedDirty}
-                    variant="destructive"
-                    className="h-10 min-w-[80px]"
-                  >
-                    {isSavingBorrowed ? "Saving..." : isBorrowedDirty ? "Save" : "Saved"}
-                  </Button>
-                </div>
-                <Input
-                  placeholder="Reason for borrowing..."
-                  className="h-10 bg-background border-destructive/20 focus:border-destructive/50 text-sm"
-                  value={borrowedNotesInput}
-                  onChange={(e) => setBorrowedNotesInput(e.target.value)}
-                />
-              </div>
-
-              {/* Descriptions */}
-              <div className="space-y-2">
-                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider pl-1">
-                  Job Description
-                </div>
-                <div className="text-sm text-foreground bg-muted/20 border border-foreground/5 p-4 rounded-xl leading-relaxed">
-                  {selectedEntry.jobDescription || (
-                    <span className="text-muted-foreground/50 italic">
-                      No description provided.
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {selectedEntry.additionalNotes && (
-                <div className="bg-blue-500/5 border-l-4 border-blue-500 p-3 rounded-r-xl">
-                  <p className="text-[10px] text-blue-600 font-bold uppercase tracking-wider mb-1">
-                    Additional Notes
-                  </p>
-                  <p className="text-sm text-blue-700 font-medium italic leading-relaxed">
-                    "{selectedEntry.additionalNotes}"
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+      {loading ? (
+        <div className="flex h-64 items-center justify-center">
+          <div className="h-7 w-7 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         </div>
+      ) : tab === "employees" ? (
+        <EmployeesTab
+          users={users ?? []}
+          entriesByUser={entriesByUser}
+          userMap={userMap}
+          totalMinsForUser={totalMinsForUser}
+          expandedUser={expandedUser}
+          setExpandedUser={setExpandedUser}
+        />
+      ) : (
+        <CustomersTab entries={entries ?? []} userMap={userMap} />
       )}
     </div>
   );
 }
+
+// ─── Employees Tab ────────────────────────────────────────────────────────────
+
+function EmployeesTab({
+  users,
+  entriesByUser,
+  userMap,
+  totalMinsForUser,
+  expandedUser,
+  setExpandedUser,
+}: {
+  users: any[];
+  entriesByUser: Map<string, any[]>;
+  userMap: Map<string, any>;
+  totalMinsForUser: (entries: any[]) => number;
+  expandedUser: string | null;
+  setExpandedUser: (id: string | null) => void;
+}) {
+  const allKeys = new Set<string>();
+  users.forEach((u) => allKeys.add(u._id));
+  entriesByUser.forEach((_, k) => allKeys.add(k));
+
+  const rows = Array.from(allKeys).map((key) => {
+    const user = userMap.get(key);
+    const userEntries = entriesByUser.get(key) ?? [];
+    const totalMins = totalMinsForUser(userEntries);
+    const displayName = user ? `${user.firstName} ${user.lastName}` : key;
+    return { key, displayName, userEntries, totalMins };
+  });
+
+  rows.sort((a, b) => a.displayName.localeCompare(b.displayName));
+
+  if (rows.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-52 text-center">
+        <Users className="h-10 w-10 text-muted-foreground/30 mb-3" />
+        <p className="font-semibold text-muted-foreground">No employees found</p>
+        <p className="text-xs text-muted-foreground/60 mt-1">
+          Employees will appear here once they sign up.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {rows.map(({ key, displayName, userEntries, totalMins }) => {
+        const isOpen = expandedUser === key;
+        const hasEntries = userEntries.length > 0;
+
+        return (
+          <Card key={key} className="border border-border/60 shadow-sm overflow-hidden">
+            <button
+              className="w-full text-left"
+              onClick={() => setExpandedUser(isOpen ? null : key)}
+            >
+              <div className="flex items-center justify-between px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-center w-9 h-9 rounded-full bg-primary/10 shrink-0">
+                    <span className="text-sm font-bold text-primary">
+                      {displayName.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm text-foreground">{displayName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {userEntries.length}{" "}
+                      {userEntries.length === 1 ? "visit" : "visits"} this week
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-foreground">
+                      {totalMins > 0 ? fmtMins(totalMins) : "—"}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
+                      {totalMins > 0 ? "this week" : "no hours logged"}
+                    </p>
+                  </div>
+                  {hasEntries &&
+                    (isOpen ? (
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    ))}
+                </div>
+              </div>
+            </button>
+
+            {isOpen && hasEntries && (
+              <div className="border-t border-border/50">
+                {userEntries.map((entry: any, i: number) => {
+                  const mins = durationMins(entry.startTime, entry.endTime);
+                  const inProgress = entry.startTime && !entry.endTime;
+                  return (
+                    <div
+                      key={entry._id}
+                      className={cn(
+                        "px-5 py-3.5 flex items-start justify-between gap-4",
+                        i < userEntries.length - 1 && "border-b border-border/30"
+                      )}
+                    >
+                      <div className="flex gap-3 min-w-0">
+                        <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-foreground truncate">
+                            {entry.customerName}
+                          </p>
+                          {entry.customerAddress && (
+                            <p className="text-xs text-muted-foreground truncate">
+                              {entry.customerAddress}
+                            </p>
+                          )}
+                          {entry.borrowedAmount > 0 && (
+                            <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-destructive bg-destructive/10 px-1.5 py-0.5 rounded">
+                              <DollarSign className="h-2.5 w-2.5" />
+                              Borrowed ${entry.borrowedAmount.toFixed(2)}
+                              {entry.borrowedNotes ? ` · ${entry.borrowedNotes}` : ""}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        {inProgress ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-600 bg-green-500/10 px-2 py-0.5 rounded uppercase tracking-wide">
+                            <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                            In Progress
+                          </span>
+                        ) : mins !== null ? (
+                          <div className="flex items-center gap-1 text-sm font-semibold text-foreground">
+                            <Clock className="h-3 w-3 text-muted-foreground" />
+                            {fmtMins(mins)}
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          {entry.entryDate}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Customers Tab ────────────────────────────────────────────────────────────
+
+function CustomersTab({
+  entries,
+  userMap,
+}: {
+  entries: any[];
+  userMap: Map<string, any>;
+}) {
+  if (entries.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-52 text-center">
+        <MapPin className="h-10 w-10 text-muted-foreground/30 mb-3" />
+        <p className="font-semibold text-muted-foreground">No customer visits this week</p>
+        <p className="text-xs text-muted-foreground/60 mt-1">
+          Visits will appear here after employees clock in.
+        </p>
+      </div>
+    );
+  }
+
+  // Group entries by customer name + address
+  const groups = new Map<string, any[]>();
+  for (const entry of entries) {
+    const key =
+      entry.customerName.toLowerCase().trim() +
+      "||" +
+      (entry.customerAddress ?? "").toLowerCase().trim();
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(entry);
+  }
+
+  const groupList = Array.from(groups.entries())
+    .map(([, groupEntries]) => groupEntries)
+    .sort((a, b) => a[0].customerName.localeCompare(b[0].customerName));
+
+  return (
+    <div className="space-y-2">
+      {groupList.map((groupEntries) => (
+        <CustomerGroup
+          key={groupEntries[0]._id}
+          entries={groupEntries}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ─── Customer Group ───────────────────────────────────────────────────────────
+
+function CustomerGroup({
+  entries,
+}: {
+  entries: any[];
+}) {
+  const updateBilling = useMutation(api.entries.updateBilling);
+
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [isSavingAmount, setIsSavingAmount] = React.useState(false);
+  const [isSavingPaid, setIsSavingPaid] = React.useState(false);
+
+  const sample = entries[0];
+  const allPaid = entries.every((e) => e.customerPaid);
+  const anyInProgress = entries.some((e) => e.startTime && !e.endTime);
+
+  // Use the first entry as the canonical billing record
+  const [billedAmount, setBilledAmount] = React.useState(
+    sample.payment > 0 ? String(sample.payment) : ""
+  );
+  React.useEffect(() => {
+    setBilledAmount(sample.payment > 0 ? String(sample.payment) : "");
+  }, [sample.payment]);
+
+  const savedAmount = sample.payment ?? 0;
+  const parsedInput = parseFloat(billedAmount) || 0;
+  const amountDirty = parsedInput !== savedAmount;
+
+  async function handleSaveAmount() {
+    setIsSavingAmount(true);
+    try {
+      await Promise.all(
+        entries.map((e) =>
+          updateBilling({ id: e._id, payment: parsedInput, customerPaid: e.customerPaid })
+        )
+      );
+    } finally {
+      setIsSavingAmount(false);
+    }
+  }
+
+  async function handleTogglePaid() {
+    setIsSavingPaid(true);
+    try {
+      await Promise.all(
+        entries.map((e) =>
+          updateBilling({ id: e._id, payment: parsedInput, customerPaid: !allPaid })
+        )
+      );
+    } finally {
+      setIsSavingPaid(false);
+    }
+  }
+
+  return (
+    <Card
+      className={cn(
+        "shadow-sm overflow-hidden border border-border/60 border-l-4",
+        allPaid ? "border-l-green-500" : "border-l-red-500"
+      )}
+    >
+      <button
+        className="w-full text-left px-5 py-4 flex items-start justify-between gap-4 hover:bg-muted/30 transition-colors"
+        onClick={() => setIsOpen((o) => !o)}
+      >
+        <div className="flex gap-3 min-w-0">
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-muted/60 shrink-0 mt-0.5">
+            <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground">{sample.customerName}</p>
+            {sample.customerAddress && (
+              <p className="text-xs text-muted-foreground">{sample.customerAddress}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {allPaid ? (
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-600 bg-green-500/10 px-2 py-0.5 rounded uppercase tracking-wide">
+              <CheckCircle2 className="h-3 w-3" /> Paid
+              {parsedInput > 0 && ` · $${parsedInput.toFixed(2)}`}
+            </span>
+          ) : anyInProgress ? (
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-600 bg-green-500/10 px-2 py-0.5 rounded uppercase tracking-wide">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+              In Progress
+            </span>
+          ) : null}
+          {isOpen ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          )}
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="border-t border-border/50 px-5 py-4 space-y-3 animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Amount billed"
+                value={billedAmount}
+                onChange={(e) => setBilledAmount(e.target.value)}
+                className="pl-9 h-10 bg-background"
+              />
+            </div>
+            <Button
+              size="sm"
+              className="h-10 px-5"
+              disabled={!amountDirty || isSavingAmount}
+              onClick={handleSaveAmount}
+            >
+              {isSavingAmount ? "Saving…" : amountDirty ? "Save" : "Saved"}
+            </Button>
+          </div>
+          <button
+            onClick={handleTogglePaid}
+            disabled={isSavingPaid}
+            className={cn(
+              "w-full flex items-center gap-3 rounded-lg border px-4 py-3 text-sm font-semibold transition-all",
+              allPaid
+                ? "border-green-500/40 bg-green-500/5 text-green-700"
+                : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+            )}
+          >
+            {allPaid ? (
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+            ) : (
+              <Circle className="h-4 w-4 shrink-0" />
+            )}
+            {isSavingPaid
+              ? "Updating…"
+              : allPaid
+              ? "Paid — click to mark unpaid"
+              : "Mark as Paid"}
+          </button>
+        </div>
+      )}
+    </Card>
+  );
+}
+

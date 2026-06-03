@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#6d28d9"/>
+  <!-- handle -->
+  <path d="M196 184 L196 156 Q196 128 224 128 L288 128 Q316 128 316 156 L316 184" fill="none" stroke="white" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- body -->
+  <rect x="88" y="184" width="336" height="220" rx="32" fill="none" stroke="white" stroke-width="28"/>
+  <!-- mid bar -->
+  <line x1="88" y1="278" x2="424" y2="278" stroke="white" stroke-width="28"/>
+  <!-- clasp -->
+  <rect x="228" y="262" width="56" height="32" rx="10" fill="white"/>
+</svg>

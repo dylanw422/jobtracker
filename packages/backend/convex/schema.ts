@@ -10,13 +10,25 @@ export default defineSchema({
     borrowedNotes: v.string(),
     jobDescription: v.string(),
     customerName: v.string(),
+    customerAddress: v.optional(v.string()),
     customerPaid: v.boolean(),
     additionalNotes: v.string(),
     entryDate: v.string(), // ISO date YYYY-MM-DD
     payment: v.number(),
+    userId: v.optional(v.string()),
   }).index("by_date", ["entryDate"]),
   settings: defineTable({
     key: v.string(), // e.g., "admin_password"
     value: v.any(),
   }).index("by_key", ["key"]),
+  users: defineTable({
+    firstName: v.string(),
+    lastName: v.string(),
+    username: v.string(),
+  }).index("by_username", ["username"]),
+  clockSessions: defineTable({
+    userId: v.string(),
+    clockInTime: v.number(),
+    clockOutTime: v.optional(v.number()),
+  }).index("by_user", ["userId"]),
 });
